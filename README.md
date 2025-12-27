@@ -1,45 +1,46 @@
-# AISpring Tools V2 Project
+# AISpring 工具集 V2 项目
 
-## Project Overview
-This project is a collection of tools and mini-applications developed under the AISpring initiative, including snake game implementations, void agent modules, webpage components, and test scripts for various functionalities.
+## 项目概述
+本项目是 AISpring 计划下开发的一系列工具和小型应用程序集合，包括贪吃蛇游戏实现、Void 智能体模块、网页组件以及各种功能测试脚本。
 
-## Directory Structure
-| Directory/File | Description |
-|----------------|-------------|
+## 目录结构
+| 目录/文件 | 描述 |
+|-----------|------|
 | `cpp_projects/` | C++示例项目和代码 |
-| `python_snake_game/` | Python-based Snake game implementation |
-| `snake_game/` | Another version or related resources for the Snake game |
-| `void-main/` | Core module for the Void agent functionality |
-| `webpage/` | Webpage-related resources or front-end components |
-| `logs/` | Storage directory for application logs |
-| `__pycache__/` | Compiled Python files (auto-generated) |
-| `.trae/` | Configuration or temporary files directory |
-| `.voidrules` | Project-specific rules and guidelines |
-| `v2_1.py` | Main script for version 2.1 of the toolset |
-| `v2_void.py` | Void agent-related script |
-| `test_doubao.py` | Test script for Doubao service/tool integration |
-## Key Files Explanation
-- `cpp_projects/`: C++示例项目，包含基本的C++编程示例和构建配置
-- `v2_1.py`: Entry point for the main functionality of version 2.1, containing core logic for the toolset.
-- `v2_void.py`: Implements basic Void agent functionalities such as command handling and validation.
-- `test_doubao.py`: Tests integration with the Doubao service, including API calls and functionality checks.
+| `python_snake_game/` | Python版贪吃蛇游戏实现 |
+| `snake_game/` | 网页版贪吃蛇游戏 |
+| `xiaochen_agent_v2/` | 小晨智能体V2核心模块 |
+| `webpage/` | 网页相关资源或前端组件 |
+| `logs/` | 应用程序日志存储目录 |
+| `__pycache__/` | 编译的Python文件（自动生成） |
+| `.trae/` | 配置或临时文件目录 |
+| `.voidrules` | 项目特定规则和指南 |
+| `.gitignore` | Git忽略文件配置 |
+| `test_doubao.py` | 豆包服务/工具集成测试脚本 |
 
-## Usage Notes
-1. **Port Occupancy**: If a port is occupied, the program is in hot deployment state—do not re-run the program.
-2. **Git Sync**: After modifying code, always sync changes using:
+## 关键文件说明
+- `cpp_projects/`: C++示例项目，包含基本的C++编程示例和构建配置
+- `python_snake_game/snake_game.py`: Python版贪吃蛇游戏主程序
+- `snake_game/index.html`: 网页版贪吃蛇游戏主文件
+- `xiaochen_agent_v2/`: 小晨智能体V2核心模块，包含智能体相关功能
+- `test_doubao.py`: 测试豆包服务的集成，包括API调用和功能检查
+
+## 使用说明
+1. **端口占用**: 如果端口被占用，表明程序处于热部署状态——请不要重新运行程序。
+2. **Git同步**: 修改代码后，始终使用以下命令同步更改：
    ```bash
    git add .
-   git commit -m "Your change description (in Chinese)"
+   git commit -m "您的修改描述（使用中文）"
    git push
    ```
-3. **Console Encoding**: Ensure the console uses UTF-8 encoding when running scripts to avoid character display issues.
-4. **Windows Compatibility**: Optimized for Windows 11 systems.
-5. **Indentation Debugging**: When using the agent's `read_file` on Python files, each line includes `[s=<spaces> t=<tabs>]` to make hidden indentation explicit.
-6. **Batch Approval**: When the agent proposes multiple tasks, you can approve them once with `y` (once) or `a` (always) instead of confirming each task repeatedly.
-7. **Auto Indent for Python**: In `edit_lines`, you can set `<auto_indent>true</auto_indent>` to align inserted code to surrounding indentation automatically.
-8. **Better Glob Matching**: Patterns like `dir/**/*.py` now also match `dir/file.py` (no intermediate subdirectory).
-9. **Modification Stats**: File modification stats are aggregated per file and printed only once for incremental new changes (not repeated every chat, and rollback won’t block future stats).
-10. **Terminal Info**: Each `run_command` now prints a `Terminal ID` and output summary to the console. If the process keeps running (or times out), it also prints a running terminal summary.
- 
-## Important Rules
-Refer to the `.voidrules` file for detailed project rules and guidelines.
+3. **控制台编码**: 运行脚本时确保控制台使用UTF-8编码，避免字符显示问题。
+4. **Windows兼容性**: 针对Windows 11系统进行了优化。
+5. **缩进调试**: 当使用智能体的`read_file`读取Python文件时，每行包含`[s=<空格数> t=<制表符数>]`以使隐藏的缩进显式化。
+6. **批量批准**: 当智能体提出多个任务时，您可以使用`y`（一次）或`a`（始终）一次性批准，而不是重复确认每个任务。
+7. **Python自动缩进**: 在`edit_lines`中，可以设置`<auto_indent>true</auto_indent>`来自动将插入的代码与周围缩进对齐。
+8. **更好的通配符匹配**: 像`dir/**/*.py`这样的模式现在也匹配`dir/file.py`（没有中间子目录）。
+9. **修改统计**: 文件修改统计按文件聚合，仅对增量新更改打印一次（不会每次聊天都重复，回滚不会阻止未来的统计）。
+10. **终端信息**: 每个`run_command`现在都会打印`终端ID`和输出摘要到控制台。如果进程持续运行（或超时），还会打印运行终端摘要。
+
+## 重要规则
+请参考`.voidrules`文件了解详细的项目规则和指南。
