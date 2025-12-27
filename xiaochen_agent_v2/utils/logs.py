@@ -6,9 +6,15 @@ import gzip
 import hashlib
 from typing import Any, Dict, List, Optional, Tuple
 
+from .files import cleanup_directory
+
 
 def log_request(messages: List[Dict[str, str]], log_dir: str = "logs") -> None:
     os.makedirs(log_dir, exist_ok=True)
+    
+    # 在保存新日志前执行清理，保持最多 50 条 void_chat 日志
+    cleanup_directory(log_dir, max_files=50, pattern="void_chat_*.json")
+    
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = os.path.join(log_dir, f"void_chat_{timestamp}.json")
 

@@ -8,6 +8,8 @@ import time
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 
+from ..utils.files import cleanup_directory
+
 
 class SessionManager:
     """会话管理器，负责会话历史的持久化存储"""
@@ -68,6 +70,10 @@ class SessionManager:
             return False
 
         filepath = os.path.join(self.sessions_dir, filename)
+        
+        # 定期清理历史会话，保留最近 50 个
+        cleanup_directory(self.sessions_dir, max_files=50, pattern="*.json")
+        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         created_at = datetime.now().isoformat()
         autosave = False

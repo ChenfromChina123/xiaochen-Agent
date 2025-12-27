@@ -252,6 +252,47 @@ def edit_lines(
     return before, after
 
 
+def cleanup_directory(directory: str, max_files: int = 50, pattern: str = "*") -> int:
+    """
+    清理指定目录中的文件，如果文件数量超过 max_files，则删除最早的文件。
+    
+    Args:
+        directory: 要清理的目录路径
+        max_files: 允许保留的最大文件数量
+        pattern: 匹配文件的通配符模式
+        
+    Returns:
+        已删除的文件数量
+    """
+    if not os.path.exists(directory):
+        return 0
+    
+    files = []
+    for filename in os.listdir(directory):
+        if not fnmatch.fnmatch(filename, pattern):
+            continue
+        filepath = os.path.join(directory, filename)
+        if os.path.isfile(filepath):
+            files.append((filepath, os.path.getmtime(filepath)))
+    
+    if len(files) <= max_files:
+        return 0
+    
+    # 按修改时间升序排列（最早的在前）
+    files.sort(key=lambda x: x[1])
+    
+    to_delete = files[:len(files) - max_files]
+    deleted_count = 0
+    for filepath, _ in to_delete:
+        try:
+            os.remove(filepath)
+            deleted_count += 1
+        except Exception:
+            pass
+            
+    return deleted_count
+
+
 def search_in_files(
     regex: str,
     root_dir: str,
