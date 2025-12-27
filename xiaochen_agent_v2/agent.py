@@ -10,6 +10,7 @@ import urllib3
 
 from .config import Config
 from .console import Fore, Style
+from .display import format_tool_display, format_observation_display, print_tool_execution_header
 from .files import (
     calculate_diff_of_lines,
     edit_lines,
@@ -23,6 +24,7 @@ from .files import (
     search_in_files,
     suggest_similar_patterns,
 )
+from .interrupt import InterruptHandler
 from .logs import append_edit_history, append_usage_history, log_request, rollback_last_edit
 from .metrics import CacheStats
 from .tags import parse_stack_of_tags
@@ -163,6 +165,7 @@ class Agent:
         self.isAutoApproveEnabled = False
         self._lastOperationIndexOfLastChat = 0
         self._lastPrintedOperationIndex = 0
+        self.interruptHandler = InterruptHandler()
 
     def estimateTokensOfMessages(self, messages: List[Dict[str, str]]) -> int:
         totalChars = 0
@@ -183,25 +186,8 @@ class Agent:
 
     def summarizeTask(self, t: Dict[str, Any]) -> str:
         """将单个任务压缩为一行摘要，便于批量批准时展示。"""
-        ttype = t.get("type") or ""
-        if ttype == "run_command":
-            cmd = str(t.get("command", "")).strip().splitlines()[:1]
-            cmdLine = cmd[0] if cmd and cmd[0] else ""
-            return f"run_command: {cmdLine}"
-        if ttype in {"write_file", "read_file"}:
-            return f"{ttype}: {t.get('path', '')}"
-        if ttype == "edit_lines":
-            ds = t.get("delete_start")
-            de = t.get("delete_end")
-            ins = t.get("insert_at")
-            return f"edit_lines: {t.get('path', '')} del={ds}-{de} ins={ins}"
-        if ttype == "search_files":
-            return f"search_files: {t.get('pattern', '')}"
-        if ttype == "search_in_files":
-            return f"search_in_files: {t.get('regex', '')}"
-        if ttype.startswith("task_"):
-            return f"{ttype}: {t.get('id', '')}"
-        return str(ttype)
+        # 使用新的友好格式显示
+        return format_tool_display(t)
 
     def confirmBatchExecution(self, tasks: List[Dict[str, Any]]) -> Tuple[bool, bool]:
         """对一批任务进行一次性批准：y=本批次执行，a=后续批次也自动批准，n=取消。"""
@@ -243,25 +229,9 @@ class Agent:
 
     def printRunCommandSummary(self, *, tid: str, cmd: str, success: bool, output: str, error: str) -> None:
         """将 run_command 的关键信息直接打印给用户，便于及时查看终端状态与输出。"""
-        status = self.terminalManager.get_terminal_status(tid)
-        isRunning = bool(status.get("is_running")) if isinstance(status, dict) else False
-        header = "SUCCESS" if success else "FAILURE"
-        state = "running" if isRunning else "exited"
-        print(f"{Style.BRIGHT}[Terminal]{Style.RESET_ALL} {header} | id={tid} | state={state}")
-        print(f"{Style.BRIGHT}Command:{Style.RESET_ALL} {cmd}")
-        if error and not success:
-            print(f"{Fore.RED}{error}{Style.RESET_ALL}")
-        if isinstance(status, dict) and status.get("output"):
-            shown = str(status.get("output") or "")
-            if len(shown) > 4000:
-                shown = shown[:4000] + "\n... (truncated)"
-            print(f"{Style.BRIGHT}Output (tail):{Style.RESET_ALL}\n{shown}")
-        else:
-            shown = output or ""
-            if len(shown) > 4000:
-                shown = shown[:4000] + "\n... (truncated)"
-            if shown.strip():
-                print(f"{Style.BRIGHT}Output:{Style.RESET_ALL}\n{shown}")
+        # 不在这里打印输出，避免重复显示
+        # 输出已经在 observations 中返回给 AI，不需要再显示给用户
+        return
         summary = self.renderRunningTerminals()
         if summary:
             print(f"{Style.BRIGHT}{summary}{Style.RESET_ALL}")
@@ -342,6 +312,8 @@ class Agent:
         return self.cacheOfProjectTree
 
     def printToolResult(self, text: str, maxChars: int = 8000) -> None:
+        """打印工具执行结果（已禁用，避免重复显示）"""
+        # 不打印工具结果，避免在用户终端显示过多信息
         return
 
     def printTaskProgress(self) -> None:
@@ -672,20 +644,52 @@ class Agent:
                 observations: List[str] = []
                 isCancelled = False
                 didExecuteAnyTask = False
+                
+                # 检查是否被用户中断
+                if self.interruptHandler.is_interrupted():
+                    print(f"\n{Fore.YELLOW}⚠️  用户已中断执行{Style.RESET_ALL}")
+                    historyWorking.append({"role": "user", "content": "用户中断执行"})
+                    break
+                
                 ok, batchApproved = self.confirmBatchExecution(tasks)
                 if not ok:
                     historyWorking.append({"role": "user", "content": "User cancelled execution"})
                     isCancelled = True
-                for t in tasks:
+                
+                # 打印任务执行计划
+                if tasks and ok:
+                    print(f"\n{Style.BRIGHT}{'='*50}{Style.RESET_ALL}")
+                    print(f"{Style.BRIGHT}开始执行 {len(tasks)} 个任务{Style.RESET_ALL}")
+                    print(f"{Style.BRIGHT}{'='*50}{Style.RESET_ALL}")
+                
+                for idx, t in enumerate(tasks, 1):
+                    # 检查中断
+                    if self.interruptHandler.is_interrupted():
+                        print(f"\n{Fore.YELLOW}⚠️  用户已中断执行{Style.RESET_ALL}")
+                        historyWorking.append({"role": "user", "content": "用户中断执行"})
+                        isCancelled = True
+                        break
+                    
                     if isCancelled:
                         break
+                    
+                    # 打印当前任务信息
+                    print_tool_execution_header(t, idx, len(tasks))
+                    
                     isWhitelisted = self.isTaskWhitelisted(t)
                     if isWhitelisted or batchApproved:
                         confirm = "y"
                     else:
-                        confirm = input(f"{Style.BRIGHT}Execute this task? (y/n): {Style.RESET_ALL}").strip().lower()
-                        if confirm == "":
-                            confirm = "y"
+                        try:
+                            confirm = input(f"{Style.BRIGHT}执行此任务? (y=是 / n=否 / Ctrl+C=中断): {Style.RESET_ALL}").strip().lower()
+                            if confirm == "":
+                                confirm = "y"
+                        except KeyboardInterrupt:
+                            print(f"\n{Fore.YELLOW}⚠️  用户中断执行{Style.RESET_ALL}")
+                            self.interruptHandler.set_interrupted()
+                            historyWorking.append({"role": "user", "content": "用户中断执行"})
+                            isCancelled = True
+                            break
 
                     if confirm.lower() != "y":
                         historyWorking.append({"role": "user", "content": "User cancelled execution"})

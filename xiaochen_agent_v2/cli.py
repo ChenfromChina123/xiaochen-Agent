@@ -3,6 +3,7 @@ import os
 from .agent import VoidAgent
 from .config import Config
 from .console import Fore, Style
+from .session import SessionManager
 
 
 def run_cli() -> None:
@@ -64,19 +65,101 @@ def run_cli() -> None:
         verifySsl=verifySsl
     )
     agent = VoidAgent(config)
+    sessionManager = SessionManager()
+    
+    # 询问是否加载历史会话
+    print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}会话管理{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+    load_choice = input(f"是否加载历史会话? (y=是 / n=否，默认n): ").strip().lower()
+    
+    if load_choice == "y":
+        sessions = sessionManager.list_sessions(limit=10)
+        if sessions:
+            print(f"\n{Fore.CYAN}可用的历史会话:{Style.RESET_ALL}")
+            for i, sess in enumerate(sessions, 1):
+                size_kb = sess['file_size'] / 1024
+                print(f"{i}. [{sess['timestamp']}] {sess['message_count']} 条消息 ({size_kb:.1f} KB)")
+            
+            try:
+                choice_idx = input(f"\n选择会话编号 (1-{len(sessions)}, 或按回车跳过): ").strip()
+                if choice_idx and choice_idx.isdigit():
+                    idx = int(choice_idx) - 1
+                    if 0 <= idx < len(sessions):
+                        selected_session = sessions[idx]
+                        messages = sessionManager.load_session(selected_session['filename'])
+                        if messages:
+                            agent.historyOfMessages = messages
+                            print(f"{Fore.GREEN}✓ 已加载会话: {selected_session['filename']}{Style.RESET_ALL}")
+                            print(f"{Fore.GREEN}  包含 {len(messages)} 条历史消息{Style.RESET_ALL}")
+                        else:
+                            print(f"{Fore.RED}✗ 加载会话失败{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.RED}✗ 加载会话出错: {str(e)}{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.YELLOW}没有找到历史会话{Style.RESET_ALL}")
+    
+    print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}开始对话 (输入 'exit' 退出, 'save' 保存会话, 'clear' 清空历史){Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
 
     while True:
         try:
+            # 重置中断标志
+            agent.interruptHandler.reset()
+            
             inputOfUser = input(f"\n{Style.BRIGHT}User: ")
             if not inputOfUser.strip():
                 continue
-            if inputOfUser.strip().lower() == "rollback":
+            
+            # 处理特殊命令
+            cmd_lower = inputOfUser.strip().lower()
+            
+            if cmd_lower == "rollback":
                 agent.rollbackLastOperation()
                 continue
-            if inputOfUser.strip().lower() in ["exit", "quit"]:
+            
+            if cmd_lower in ["exit", "quit"]:
+                # 询问是否保存会话
+                if agent.historyOfMessages:
+                    save_choice = input(f"{Fore.CYAN}是否保存当前会话? (y/n, 默认n): {Style.RESET_ALL}").strip().lower()
+                    if save_choice == "y":
+                        session_name = input(f"{Fore.CYAN}输入会话名称 (可选，按回车跳过): {Style.RESET_ALL}").strip()
+                        filename = sessionManager.save_session(agent.historyOfMessages, session_name or None)
+                        if filename:
+                            print(f"{Fore.GREEN}✓ 会话已保存: {filename}{Style.RESET_ALL}")
                 break
+            
+            if cmd_lower == "save":
+                if agent.historyOfMessages:
+                    session_name = input(f"{Fore.CYAN}输入会话名称 (可选，按回车跳过): {Style.RESET_ALL}").strip()
+                    filename = sessionManager.save_session(agent.historyOfMessages, session_name or None)
+                    if filename:
+                        print(f"{Fore.GREEN}✓ 会话已保存: {filename}{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.YELLOW}当前没有会话历史{Style.RESET_ALL}")
+                continue
+            
+            if cmd_lower == "clear":
+                confirm = input(f"{Fore.YELLOW}确认清空会话历史? (y/n): {Style.RESET_ALL}").strip().lower()
+                if confirm == "y":
+                    agent.historyOfMessages = []
+                    print(f"{Fore.GREEN}✓ 会话历史已清空{Style.RESET_ALL}")
+                continue
+            
+            # 正常对话
             agent.chat(inputOfUser)
+            
         except KeyboardInterrupt:
-            print(f"\n{Fore.BLUE}小晨终端助手 正在退出...{Style.RESET_ALL}")
-            break
+            # 设置中断标志
+            agent.interruptHandler.set_interrupted()
+            print(f"\n{Fore.YELLOW}⚠️  检测到中断信号 (Ctrl+C){Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}   再次按 Ctrl+C 退出程序{Style.RESET_ALL}")
+            
+            # 等待第二次 Ctrl+C 来真正退出
+            try:
+                input(f"{Fore.CYAN}按回车继续，或 Ctrl+C 退出: {Style.RESET_ALL}")
+            except KeyboardInterrupt:
+                print(f"\n{Fore.BLUE}小晨终端助手 正在退出...{Style.RESET_ALL}")
+                break
 
