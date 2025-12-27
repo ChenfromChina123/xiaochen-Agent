@@ -1,0 +1,8 @@
+{
+  "api_key": "sk-45021a61b84a4693a1db4deb72cec673",
+  "base_url": "https://api.deepseek.com",
+  "model_name": "deepseek-chat",
+  "verify_ssl": true,
+  "auto_save_session": false,
+  "max_cycles": 30
+}

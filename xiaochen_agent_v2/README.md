@@ -44,12 +44,12 @@
 
 #### Windows 用户
 
-1. 双击运行 `install.bat`
+1. 双击运行 `scripts/install.bat`
 2. 按照提示完成安装
 3. 重新打开命令行，输入 `agent` 即可启动
 
 ```cmd
-install.bat
+scripts\install.bat
 ```
 
 #### Linux/Mac 用户
@@ -57,8 +57,8 @@ install.bat
 1. 运行安装脚本：
 
 ```bash
-chmod +x install.sh
-./install.sh
+chmod +x scripts/install.sh
+./scripts/install.sh
 ```
 
 2. 按照提示完成安装

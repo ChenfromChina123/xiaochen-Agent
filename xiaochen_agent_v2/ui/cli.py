@@ -1,21 +1,11 @@
 import os
 import sys
 
-# 添加父目录到路径，以便导入 config_manager
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from .agent import VoidAgent
-from .config import Config
-from .console import Fore, Style
-from .session import SessionManager
-try:
-    from config_manager import ConfigManager
-except ImportError:
-    # 如果在包内运行，尝试相对导入
-    try:
-        from ..config_manager import ConfigManager
-    except ImportError:
-        ConfigManager = None
+from ..core.agent import VoidAgent
+from ..core.config import Config
+from ..utils.console import Fore, Style
+from ..core.session import SessionManager
+from ..core.config_manager import ConfigManager
 
 
 def run_cli() -> None:
@@ -32,7 +22,8 @@ def run_cli() -> None:
         os.system('chcp 65001 > nul')
 
     # 初始化配置管理器
-    configManager = ConfigManager() if ConfigManager else None
+    config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
+    configManager = ConfigManager(config_file=config_file)
     savedConfig = {}
     
     if configManager:
@@ -78,17 +69,13 @@ def run_cli() -> None:
             print(f"{Fore.RED}Error: API Key is required.{Style.RESET_ALL}")
             return
         
-        # 保存配置到文件
         if configManager:
-            print(f"\n{Fore.CYAN}是否保存 API Key 到配置文件? (y/n, 默认y): {Style.RESET_ALL}", end="")
-            save_choice = input().strip().lower()
-            if save_choice != "n":
-                configManager.update_config("api_key", apiKey)
-                configManager.update_config("base_url", baseUrl)
-                configManager.update_config("model_name", modelName)
-                configManager.update_config("verify_ssl", verifySsl)
-                print(f"{Fore.GREEN}✓ 配置已保存到 config.json{Style.RESET_ALL}")
-                print(f"{Fore.GREEN}  下次启动将自动使用此配置{Style.RESET_ALL}")
+            configManager.update_config("api_key", apiKey)
+            configManager.update_config("base_url", baseUrl)
+            configManager.update_config("model_name", modelName)
+            configManager.update_config("verify_ssl", verifySsl)
+            print(f"{Fore.GREEN}✓ 配置已自动保存到 config.json{Style.RESET_ALL}")
+            print(f"{Fore.GREEN}  下次启动将自动使用此配置{Style.RESET_ALL}")
 
     config = Config(
         apiKey=apiKey, 
@@ -98,6 +85,11 @@ def run_cli() -> None:
     )
     agent = VoidAgent(config)
     sessionManager = SessionManager()
+    autosaveFilename = ""
+    try:
+        autosaveFilename = sessionManager.create_autosave_session()
+    except Exception:
+        autosaveFilename = ""
     
     # 询问是否加载历史会话
     print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
@@ -122,6 +114,11 @@ def run_cli() -> None:
                         messages = sessionManager.load_session(selected_session['filename'])
                         if messages:
                             agent.historyOfMessages = messages
+                            try:
+                                if autosaveFilename:
+                                    sessionManager.update_session(autosaveFilename, agent.historyOfMessages)
+                            except Exception:
+                                pass
                             print(f"{Fore.GREEN}✓ 已加载会话: {selected_session['filename']}{Style.RESET_ALL}")
                             print(f"{Fore.GREEN}  包含 {len(messages)} 条历史消息{Style.RESET_ALL}")
                         else:
@@ -176,11 +173,21 @@ def run_cli() -> None:
                 confirm = input(f"{Fore.YELLOW}确认清空会话历史? (y/n): {Style.RESET_ALL}").strip().lower()
                 if confirm == "y":
                     agent.historyOfMessages = []
+                    try:
+                        if autosaveFilename:
+                            sessionManager.update_session(autosaveFilename, agent.historyOfMessages)
+                    except Exception:
+                        pass
                     print(f"{Fore.GREEN}✓ 会话历史已清空{Style.RESET_ALL}")
                 continue
             
             # 正常对话
             agent.chat(inputOfUser)
+            try:
+                if autosaveFilename:
+                    sessionManager.update_session(autosaveFilename, agent.historyOfMessages)
+            except Exception:
+                pass
             
         except KeyboardInterrupt:
             # 设置中断标志
@@ -194,4 +201,3 @@ def run_cli() -> None:
             except KeyboardInterrupt:
                 print(f"\n{Fore.BLUE}小晨终端助手 正在退出...{Style.RESET_ALL}")
                 break
-

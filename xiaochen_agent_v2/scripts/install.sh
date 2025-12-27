@@ -10,6 +10,7 @@ echo ""
 
 # 获取脚本所在目录
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ROOT_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # 检查 Python 是否安装
 if ! command -v python3 &> /dev/null; then
@@ -23,12 +24,12 @@ python3 --version
 # 安装依赖
 echo ""
 echo "[2/4] 安装依赖包..."
-pip3 install -r "$SCRIPT_DIR/requirements.txt"
+pip3 install -r "$ROOT_DIR/requirements.txt"
 
 # 创建配置文件（如果不存在）
 echo ""
 echo "[3/4] 检查配置文件..."
-if [ ! -f "$SCRIPT_DIR/config.json" ]; then
+if [ ! -f "$ROOT_DIR/config.json" ]; then
     echo "配置文件不存在，将在首次运行时创建"
 else
     echo "配置文件已存在"

@@ -21,6 +21,63 @@ class SessionManager:
         """
         self.sessions_dir = sessions_dir
         os.makedirs(self.sessions_dir, exist_ok=True)
+
+    def create_autosave_session(self, session_name: Optional[str] = None) -> str:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if session_name:
+            session_name = "".join(c for c in session_name if c.isalnum() or c in (" ", "-", "_")).strip()
+            filename = f"{timestamp}_{session_name}.json"
+        else:
+            filename = f"{timestamp}_autosave.json"
+
+        filepath = os.path.join(self.sessions_dir, filename)
+        session_data = {
+            "timestamp": timestamp,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "message_count": 0,
+            "messages": [],
+            "autosave": True,
+        }
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(session_data, f, ensure_ascii=False, indent=2)
+        return filename
+
+    def update_session(self, filename: str, messages: List[Dict[str, str]]) -> bool:
+        if not filename:
+            return False
+
+        filepath = os.path.join(self.sessions_dir, filename)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        created_at = datetime.now().isoformat()
+        autosave = False
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                timestamp = data.get("timestamp", timestamp)
+                created_at = data.get("created_at", created_at)
+                autosave = bool(data.get("autosave", False))
+            except Exception:
+                pass
+
+        session_data = {
+            "timestamp": timestamp,
+            "created_at": created_at,
+            "updated_at": datetime.now().isoformat(),
+            "message_count": len(messages),
+            "messages": messages,
+        }
+        if autosave:
+            session_data["autosave"] = True
+
+        try:
+            os.makedirs(self.sessions_dir, exist_ok=True)
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(session_data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception:
+            return False
     
     def save_session(self, messages: List[Dict[str, str]], session_name: Optional[str] = None) -> str:
         """

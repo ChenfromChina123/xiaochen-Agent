@@ -9,9 +9,9 @@ import requests
 import urllib3
 
 from .config import Config
-from .console import Fore, Style
-from .display import format_tool_display, format_observation_display, print_tool_execution_header
-from .files import (
+from ..utils.console import Fore, Style
+from ..utils.display import format_tool_display, format_observation_display, print_tool_execution_header
+from ..utils.files import (
     calculate_diff_of_lines,
     edit_lines,
     ensure_parent_dir,
@@ -24,11 +24,11 @@ from .files import (
     search_in_files,
     suggest_similar_patterns,
 )
-from .interrupt import InterruptHandler
-from .logs import append_edit_history, append_usage_history, log_request, rollback_last_edit
+from ..utils.interrupt import InterruptHandler
+from ..utils.logs import append_edit_history, append_usage_history, log_request, rollback_last_edit
 from .metrics import CacheStats
-from .tags import parse_stack_of_tags
-from .terminal import TerminalManager
+from ..utils.tags import parse_stack_of_tags
+from ..utils.terminal import TerminalManager
 
 
 @dataclass
@@ -276,17 +276,17 @@ class Agent:
         self.cacheOfProjectTree = None
 
     def invalidateUserRulesCache(self) -> None:
-        """使 .voidrules 缓存失效（下次构造 user 上下文时会重新读取）。"""
+        """使 userrules 缓存失效（下次构造 user 上下文时会重新读取）。"""
         self.cacheOfUserRules = None
 
     def getUserRulesCached(self) -> str:
-        """读取并缓存 .voidrules 内容；仅在缓存失效后才重新读取。"""
+        """读取并缓存 userrules 内容；仅在缓存失效后才重新读取。"""
         if self.cacheOfUserRules is not None:
             return self.cacheOfUserRules
 
         contentOfRules = ""
         cwd = os.getcwd()
-        pathOfRules = os.path.join(cwd, ".voidrules")
+        pathOfRules = os.path.join(cwd, "userrules")
         if os.path.exists(pathOfRules):
             try:
                 with open(pathOfRules, "r", encoding="utf-8") as f:
@@ -781,7 +781,7 @@ class Agent:
                                 meta={"type": "write_file"},
                             )
                             self.invalidateProjectTreeCache()
-                            if os.path.basename(path).lower() == ".voidrules":
+                            if os.path.basename(path).lower() == "userrules":
                                 self.invalidateUserRulesCache()
                             obs = f"SUCCESS: Saved to {path} | +{added} | -{deleted}"
                             observations.append(obs)
@@ -826,7 +826,7 @@ class Agent:
                                 },
                             )
                             self.invalidateProjectTreeCache()
-                            if os.path.basename(path).lower() == ".voidrules":
+                            if os.path.basename(path).lower() == "userrules":
                                 self.invalidateUserRulesCache()
                             obs = f"SUCCESS: Edited {path} | +{added} | -{deleted}"
                             observations.append(obs)
