@@ -8,5 +8,5 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
 # 运行程序
-python3 -m xiaochen_agent_v2
+python3 run.py
 
