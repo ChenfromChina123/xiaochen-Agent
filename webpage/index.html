@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的小网页</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        main {
+            padding: 40px;
+        }
+        
+        .intro {
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 5px;
+        }
+        
+        p {
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .feature-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            transition: transform 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .feature-card h3 {
+            color: #764ba2;
+            margin-bottom: 10px;
+        }
+        
+        .counter {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        #count {
+            font-size: 3rem;
+            color: #667eea;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background: #667eea;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        button:hover {
+            background: #764ba2;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        footer {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            color: #666;
+            border-top: 1px solid #eee;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+            }
+            
+            main {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>欢迎来到我的小网页</h1>
+            <p class="subtitle">一个简单而优雅的现代网页示例</p>
+        </header>
+        
+        <main>
+            <section class="intro">
+                <h2>关于这个网页</h2>
+                <p>这是一个使用纯HTML、CSS和JavaScript创建的响应式网页示例。它展示了现代网页设计的基本元素，包括响应式布局、交互式组件和美观的视觉效果。</p>
+                <p>网页完全在本地运行，无需任何外部依赖。</p>
+            </section>
+            
+            <section class="features">
+                <div class="feature-card">
+                    <h3>响应式设计</h3>
+                    <p>自适应各种屏幕尺寸，从手机到桌面电脑都能完美显示。</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>现代UI</h3>
+                    <p>使用CSS渐变、阴影和过渡效果，创造流畅的用户体验。</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>交互功能</h3>
+                    <p>包含JavaScript交互元素，如计数器功能。</p>
+                </div>
+            </section>
+            
+            <section class="counter">
+                <h2>交互式计数器</h2>
+                <p>点击按钮来增加或减少计数：</p>
+                <div id="count">0</div>
+                <div class="buttons">
+                    <button id="decrease">减少</button>
+                    <button id="reset">重置</button>
+                    <button id="increase">增加</button>
+                </div>
+            </section>
+            
+            <section>
+                <h2>技术特点</h2>
+                <p>• 使用HTML5语义化标签</p>
+                <p>• CSS3 Flexbox和Grid布局</p>
+                <p>• 纯JavaScript交互</p>
+                <p>• 完全本地运行，无需网络连接</p>
+            </section>
+        </main>
+        
+        <footer>
+            <p>© 2023 我的小网页 | 使用HTML、CSS和JavaScript创建</p>
+            <p>最后更新: <span id="current-date"></span></p>
+        </footer>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const countElement = document.getElementById('count');
+        const increaseButton = document.getElementById('increase');
+        const decreaseButton = document.getElementById('decrease');
+        const resetButton = document.getElementById('reset');
+        const currentDateElement = document.getElementById('current-date');
+        
+        // 初始化计数器
+        let count = 0;
+        
+        // 更新计数器显示
+        function updateCount() {
+            countElement.textContent = count;
+            // 根据数值改变颜色
+            if (count > 0) {
+                countElement.style.color = '#4CAF50'; // 绿色
+            } else if (count < 0) {
+                countElement.style.color = '#F44336'; // 红色
+            } else {
+                countElement.style.color = '#667eea'; // 蓝色
+            }
+        }
+        
+        // 增加计数
+        increaseButton.addEventListener('click', () => {
+            count++;
+            updateCount();
+        });
+        
+        // 减少计数
+        decreaseButton.addEventListener('click', () => {
+            count--;
+            updateCount();
+        });
+        
+        // 重置计数
+        resetButton.addEventListener('click', () => {
+            count = 0;
+            updateCount();
+        });
+        
+        // 显示当前日期
+        function updateDate() {
+            const now = new Date();
+            const options = { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                weekday: 'long'
+            };
+            currentDateElement.textContent = now.toLocaleDateString('zh-CN', options);
+        }
+        
+        // 初始化
+        updateCount();
+        updateDate();
+        
+        // 添加键盘支持
+        document.addEventListener('keydown', (event) => {
+            switch(event.key) {
+                case '+':
+                case '=':
+                    count++;
+                    updateCount();
+                    break;
+                case '-':
+                case '_':
+                    count--;
+                    updateCount();
+                    break;
+                case '0':
+                    count = 0;
+                    updateCount();
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>

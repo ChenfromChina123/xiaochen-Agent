@@ -1,0 +1,7 @@
+# Python贪吃蛇游戏依赖包
+# 版本要求：Python 3.6+
+
+pygame>=2.0.0
+
+# 安装命令：
+# pip install -r requirements.txt

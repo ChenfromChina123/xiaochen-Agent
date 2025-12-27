@@ -1,0 +1,33 @@
+如何运行C++示例程序：
+
+1. 打开命令提示符（CMD）或PowerShell
+2. 进入当前目录：
+   cd /d "D:\Users\Administrator\AistudyProject\new_pro\aispring\tools\v2\cpp_projects"
+
+3. 设置UTF-8编码（Windows）：
+   chcp 65001
+
+4. 运行程序：
+   hello_world.exe
+
+5. 按照程序提示输入：
+   - 输入您的名字（如：张三）
+   - 输入两个整数（如：3 8）
+   - 输入乘法表大小（1-10，如：5）
+
+6. 程序将显示结果，最后按Enter键退出
+
+程序功能：
+- 显示欢迎信息
+- 接收用户输入
+- 计算数字和
+- 检查数字奇偶性
+- 显示乘法表
+- 展示数组操作
+
+编译信息：
+程序已使用以下命令编译：
+g++ -o hello_world.exe hello_world.cpp -std=c++11
+
+如需重新编译：
+g++ -o hello_world.exe hello_world.cpp -std=c++11
