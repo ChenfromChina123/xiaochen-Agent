@@ -43,6 +43,26 @@ class SessionManager:
             json.dump(session_data, f, ensure_ascii=False, indent=2)
         return filename
 
+    def _format_messages(self, messages: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        """将消息内容转换为分行列表格式，便于阅读和匹配 void_chat 格式"""
+        formatted = []
+        for msg in messages:
+            msg_copy = msg.copy()
+            if "content" in msg_copy and isinstance(msg_copy["content"], str):
+                msg_copy["content"] = msg_copy["content"].splitlines()
+            formatted.append(msg_copy)
+        return formatted
+
+    def _parse_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        """将分行列表格式的消息内容转换回字符串格式"""
+        parsed = []
+        for msg in messages:
+            msg_copy = msg.copy()
+            if "content" in msg_copy and isinstance(msg_copy["content"], list):
+                msg_copy["content"] = "\n".join(msg_copy["content"])
+            parsed.append(msg_copy)
+        return parsed
+
     def update_session(self, filename: str, messages: List[Dict[str, str]]) -> bool:
         if not filename:
             return False
@@ -55,18 +75,22 @@ class SessionManager:
             try:
                 with open(filepath, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                timestamp = data.get("timestamp", timestamp)
-                created_at = data.get("created_at", created_at)
-                autosave = bool(data.get("autosave", False))
+                if isinstance(data, dict):
+                    timestamp = data.get("timestamp", timestamp)
+                    created_at = data.get("created_at", created_at)
+                    autosave = bool(data.get("autosave", False))
             except Exception:
                 pass
+
+        # 转换为分行格式
+        formatted_messages = self._format_messages(messages)
 
         session_data = {
             "timestamp": timestamp,
             "created_at": created_at,
             "updated_at": datetime.now().isoformat(),
             "message_count": len(messages),
-            "messages": messages,
+            "messages": formatted_messages,
         }
         if autosave:
             session_data["autosave"] = True
@@ -103,11 +127,14 @@ class SessionManager:
         
         filepath = os.path.join(self.sessions_dir, filename)
         
+        # 转换为分行格式
+        formatted_messages = self._format_messages(messages)
+
         session_data = {
             "timestamp": timestamp,
             "created_at": datetime.now().isoformat(),
             "message_count": len(messages),
-            "messages": messages
+            "messages": formatted_messages
         }
         
         with open(filepath, "w", encoding="utf-8") as f:
@@ -174,7 +201,8 @@ class SessionManager:
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
-            return data.get("messages", [])
+            messages = data.get("messages", [])
+            return self._parse_messages(messages)
         except Exception:
             return None
     

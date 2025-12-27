@@ -113,10 +113,15 @@ def run_cli() -> None:
                         selected_session = sessions[idx]
                         messages = sessionManager.load_session(selected_session['filename'])
                         if messages:
-                            agent.historyOfMessages = messages
+                            # 如果第一条消息是系统消息，则剔除它，因为 Agent 会自动生成
+                            if messages and messages[0].get("role") == "system":
+                                agent.historyOfMessages = messages[1:]
+                            else:
+                                agent.historyOfMessages = messages
+                            
                             try:
                                 if autosaveFilename:
-                                    sessionManager.update_session(autosaveFilename, agent.historyOfMessages)
+                                    sessionManager.update_session(autosaveFilename, agent.getFullHistory())
                             except Exception:
                                 pass
                             print(f"{Fore.GREEN}✓ 已加载会话: {selected_session['filename']}{Style.RESET_ALL}")
@@ -154,7 +159,7 @@ def run_cli() -> None:
                     save_choice = input(f"{Fore.CYAN}是否保存当前会话? (y/n, 默认n): {Style.RESET_ALL}").strip().lower()
                     if save_choice == "y":
                         session_name = input(f"{Fore.CYAN}输入会话名称 (可选，按回车跳过): {Style.RESET_ALL}").strip()
-                        filename = sessionManager.save_session(agent.historyOfMessages, session_name or None)
+                        filename = sessionManager.save_session(agent.getFullHistory(), session_name or None)
                         if filename:
                             print(f"{Fore.GREEN}✓ 会话已保存: {filename}{Style.RESET_ALL}")
                 break
@@ -162,7 +167,7 @@ def run_cli() -> None:
             if cmd_lower == "save":
                 if agent.historyOfMessages:
                     session_name = input(f"{Fore.CYAN}输入会话名称 (可选，按回车跳过): {Style.RESET_ALL}").strip()
-                    filename = sessionManager.save_session(agent.historyOfMessages, session_name or None)
+                    filename = sessionManager.save_session(agent.getFullHistory(), session_name or None)
                     if filename:
                         print(f"{Fore.GREEN}✓ 会话已保存: {filename}{Style.RESET_ALL}")
                 else:
@@ -175,7 +180,7 @@ def run_cli() -> None:
                     agent.historyOfMessages = []
                     try:
                         if autosaveFilename:
-                            sessionManager.update_session(autosaveFilename, agent.historyOfMessages)
+                            sessionManager.update_session(autosaveFilename, agent.getFullHistory())
                     except Exception:
                         pass
                     print(f"{Fore.GREEN}✓ 会话历史已清空{Style.RESET_ALL}")
@@ -185,7 +190,7 @@ def run_cli() -> None:
             agent.chat(inputOfUser)
             try:
                 if autosaveFilename:
-                    sessionManager.update_session(autosaveFilename, agent.historyOfMessages)
+                    sessionManager.update_session(autosaveFilename, agent.getFullHistory())
             except Exception:
                 pass
             

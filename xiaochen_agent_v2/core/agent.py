@@ -423,6 +423,10 @@ class Agent:
         self.printStatsOfModification(opsToPrint)
         self._lastPrintedOperationIndex = len(self.historyOfOperations)
 
+    def getFullHistory(self) -> List[Dict[str, str]]:
+        """返回包含系统提示词的完整历史记录。"""
+        return [self.getSystemMessage()] + self.historyOfMessages
+
     def chat(self, inputOfUser: str):
         """
         处理用户输入并启动 AI 代理的多轮任务执行循环。
