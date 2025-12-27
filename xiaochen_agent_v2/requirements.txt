@@ -1,0 +1,12 @@
+# 小晨终端助手 (XIAOCHEN_TERMINAL) 依赖包
+# Python 3.7+ 必需
+
+# HTTP 请求库
+requests>=2.31.0
+
+# SSL 警告处理
+urllib3>=2.0.0
+
+# 彩色终端输出
+colorama>=0.4.6
+
