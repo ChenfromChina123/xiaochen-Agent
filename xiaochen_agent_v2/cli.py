@@ -1,9 +1,21 @@
 import os
+import sys
+
+# 添加父目录到路径，以便导入 config_manager
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from .agent import VoidAgent
 from .config import Config
 from .console import Fore, Style
 from .session import SessionManager
+try:
+    from config_manager import ConfigManager
+except ImportError:
+    # 如果在包内运行，尝试相对导入
+    try:
+        from ..config_manager import ConfigManager
+    except ImportError:
+        ConfigManager = None
 
 
 def run_cli() -> None:
@@ -19,6 +31,13 @@ def run_cli() -> None:
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
         os.system('chcp 65001 > nul')
 
+    # 初始化配置管理器
+    configManager = ConfigManager() if ConfigManager else None
+    savedConfig = {}
+    
+    if configManager:
+        savedConfig = configManager.load_config()
+    
     # 模型预设
     PRESETS = {
         "1": {
@@ -35,10 +54,11 @@ def run_cli() -> None:
         }
     }
 
-    apiKey = os.environ.get("VOID_API_KEY")
-    baseUrl = os.environ.get("VOID_BASE_URL")
-    modelName = os.environ.get("VOID_MODEL")
-    verifySsl = True
+    # 优先级: 环境变量 > 配置文件 > 用户输入
+    apiKey = os.environ.get("VOID_API_KEY") or savedConfig.get("api_key", "")
+    baseUrl = os.environ.get("VOID_BASE_URL") or savedConfig.get("base_url", "")
+    modelName = os.environ.get("VOID_MODEL") or savedConfig.get("model_name", "")
+    verifySsl = savedConfig.get("verify_ssl", True)
 
     if not apiKey:
         print(f"{Fore.CYAN}=== 小晨终端助手 (XIAOCHEN_TERMINAL) ==={Style.RESET_ALL}")
@@ -57,6 +77,18 @@ def run_cli() -> None:
         if not apiKey:
             print(f"{Fore.RED}Error: API Key is required.{Style.RESET_ALL}")
             return
+        
+        # 保存配置到文件
+        if configManager:
+            print(f"\n{Fore.CYAN}是否保存 API Key 到配置文件? (y/n, 默认y): {Style.RESET_ALL}", end="")
+            save_choice = input().strip().lower()
+            if save_choice != "n":
+                configManager.update_config("api_key", apiKey)
+                configManager.update_config("base_url", baseUrl)
+                configManager.update_config("model_name", modelName)
+                configManager.update_config("verify_ssl", verifySsl)
+                print(f"{Fore.GREEN}✓ 配置已保存到 config.json{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}  下次启动将自动使用此配置{Style.RESET_ALL}")
 
     config = Config(
         apiKey=apiKey, 

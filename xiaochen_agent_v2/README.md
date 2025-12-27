@@ -40,36 +40,102 @@
 
 ## 🚀 快速开始
 
-### 安装依赖
+### 方式一：一键安装（推荐）
+
+#### Windows 用户
+
+1. 双击运行 `install.bat`
+2. 按照提示完成安装
+3. 重新打开命令行，输入 `agent` 即可启动
+
+```cmd
+install.bat
+```
+
+#### Linux/Mac 用户
+
+1. 运行安装脚本：
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+2. 按照提示完成安装
+3. 重新打开终端，输入 `agent` 即可启动
+
+### 方式二：手动安装
+
+#### 1. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 运行程序
+#### 2. 配置 API Key（三种方式任选其一）
+
+**方式 A：使用配置文件（推荐）**
+
+首次运行时，程序会提示输入 API Key，并自动保存到 `config.json`：
 
 ```bash
 python -m xiaochen_agent_v2
 ```
 
-或者：
+或手动创建 `config.json`：
 
-```bash
-python run.py
+```json
+{
+  "api_key": "your_api_key_here",
+  "base_url": "https://api.deepseek.com",
+  "model_name": "deepseek-chat",
+  "verify_ssl": true,
+  "auto_save_session": false,
+  "max_cycles": 30
+}
 ```
 
-### 环境变量配置（可选）
+**方式 B：使用环境变量**
 
 ```bash
-# 设置 API Key
+# Windows
 set VOID_API_KEY=your_api_key_here
-
-# 设置 Base URL（可选）
 set VOID_BASE_URL=https://api.deepseek.com
-
-# 设置模型名称（可选）
 set VOID_MODEL=deepseek-chat
+
+# Linux/Mac
+export VOID_API_KEY=your_api_key_here
+export VOID_BASE_URL=https://api.deepseek.com
+export VOID_MODEL=deepseek-chat
 ```
+
+**方式 C：每次启动时输入**
+
+直接运行程序，按提示输入（不推荐）
+
+#### 3. 运行程序
+
+```bash
+# 方式 1：使用 Python 模块
+python -m xiaochen_agent_v2
+
+# 方式 2：使用启动脚本
+python run.py
+
+# 方式 3：使用批处理文件（Windows）
+agent.bat
+
+# 方式 4：使用 Shell 脚本（Linux/Mac）
+./agent.sh
+```
+
+### 配置优先级
+
+程序按以下优先级读取配置：
+
+1. **环境变量**（最高优先级）
+2. **配置文件** `config.json`
+3. **用户输入**（最低优先级）
 
 ## 📖 使用指南
 
@@ -150,24 +216,48 @@ User: exit
 
 ```
 xiaochen_agent_v2/
-├── __init__.py          # 包初始化
-├── __main__.py          # 程序入口
-├── agent.py             # AI 代理核心逻辑
-├── cli.py               # 命令行界面
-├── config.py            # 配置管理
-├── console.py           # 控制台输出
-├── display.py           # 显示格式化（新增）
-├── files.py             # 文件操作
-├── interrupt.py         # 中断处理（新增）
-├── logs.py              # 日志记录
-├── metrics.py           # 性能指标
-├── session.py           # 会话管理（新增）
-├── tags.py              # 标签解析
-├── terminal.py          # 终端管理
-└── run.py               # 运行脚本
+├── xiaochen_agent_v2/      # 主程序包
+│   ├── __init__.py         # 包初始化
+│   ├── __main__.py         # 程序入口
+│   ├── agent.py            # AI 代理核心逻辑
+│   ├── cli.py              # 命令行界面
+│   ├── config.py           # 配置数据类
+│   ├── console.py          # 控制台输出
+│   ├── display.py          # 显示格式化（新增）
+│   ├── files.py            # 文件操作
+│   ├── interrupt.py        # 中断处理（新增）
+│   ├── logs.py             # 日志记录
+│   ├── metrics.py          # 性能指标
+│   ├── session.py          # 会话管理（新增）
+│   ├── tags.py             # 标签解析
+│   └── terminal.py         # 终端管理
+├── config_manager.py       # 配置文件管理（新增）
+├── config.json.example     # 配置文件示例（新增）
+├── agent.bat               # Windows 启动脚本（新增）
+├── agent.sh                # Linux/Mac 启动脚本（新增）
+├── install.bat             # Windows 安装脚本（新增）
+├── install.sh              # Linux/Mac 安装脚本（新增）
+├── run.py                  # Python 运行脚本
+├── requirements.txt        # 依赖列表
+└── README.md               # 项目文档
 ```
 
 ## 🔧 配置说明
+
+### 配置文件 (config.json)
+
+配置文件支持以下选项：
+
+```json
+{
+  "api_key": "your_api_key_here",        // API 密钥（必填）
+  "base_url": "https://api.deepseek.com", // API 基础 URL
+  "model_name": "deepseek-chat",          // 模型名称
+  "verify_ssl": true,                     // 是否验证 SSL 证书
+  "auto_save_session": false,             // 是否自动保存会话
+  "max_cycles": 30                        // 最大循环次数
+}
+```
 
 ### 模型预设
 
@@ -176,10 +266,12 @@ xiaochen_agent_v2/
 1. **DeepSeek (Default)**
    - Base URL: `https://api.deepseek.com`
    - Model: `deepseek-chat`
+   - 推荐用于：通用对话、代码生成
 
 2. **Doubao (Volcano Ark)**
    - Base URL: `https://ark.cn-beijing.volces.com/api/v3`
    - Model: `doubao-seed-1-6-251015`
+   - 推荐用于：中文对话
 
 ### 会话存储
 
@@ -194,6 +286,28 @@ xiaochen_agent_v2/
 - 创建时间
 - 消息数量
 - 完整的消息历史
+
+### 环境变量配置到系统
+
+#### Windows (永久配置)
+
+```cmd
+# 添加到用户环境变量
+setx VOID_API_KEY "your_api_key_here"
+
+# 或使用图形界面
+# 1. Win + R 输入 sysdm.cpl
+# 2. 高级 -> 环境变量
+# 3. 新建用户变量 VOID_API_KEY
+```
+
+#### Linux/Mac (永久配置)
+
+```bash
+# 添加到 ~/.bashrc 或 ~/.zshrc
+echo 'export VOID_API_KEY="your_api_key_here"' >> ~/.bashrc
+source ~/.bashrc
+```
 
 ## 🎯 使用场景
 
