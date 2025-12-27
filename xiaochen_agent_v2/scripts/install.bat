@@ -17,22 +17,58 @@ for %%I in ("%ROOT_DIR%") do set "ROOT_DIR=%%~fI"
 :: Check Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Python not found. Please install Python 3.7+
-    pause
-    exit /b 1
+    echo [INFO] 'python' command not found in PATH. Searching for Python installation...
+    
+    :: Try to find python.exe using PowerShell in common locations
+    for /f "delims=" %%p in ('powershell -NoProfile -Command "$paths = @(\"$env:LocalAppData\Programs\Python\", \"C:\Python\", \"$env:ProgramFiles\Python\", \"$env:ProgramFiles(x86)\Python\"); $found = $null; foreach ($p in $paths) { if (Test-Path $p) { $exe = Get-ChildItem -Path $p -Filter python.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1; if ($exe) { $found = $exe.FullName; break } } }; if ($found) { write-output $found } else { exit 1 }"') do set "FOUND_PYTHON=%%p"
+    
+    if defined FOUND_PYTHON (
+        echo [SUCCESS] Found Python at: !FOUND_PYTHON!
+        set "PYTHON_CMD=!FOUND_PYTHON!"
+        
+        :: Ask user if they want to add this Python to PATH
+        echo.
+        set /p ADD_PY_TO_PATH="Would you like to add this Python to your PATH? (y/n, default y): "
+        if "!ADD_PY_TO_PATH!"=="" set "ADD_PY_TO_PATH=y"
+        
+        if /i "!ADD_PY_TO_PATH!"=="y" (
+            for %%F in ("!FOUND_PYTHON!") do set "PY_DIR=%%~dpF"
+            set "PY_DIR=!PY_DIR:~0,-1!"
+            set "SCRIPTS_DIR=!PY_DIR!\Scripts"
+            
+            echo Adding !PY_DIR! and !SCRIPTS_DIR! to User PATH...
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "$dirs = @('%PY_DIR%', '%SCRIPTS_DIR%'); $p = [Environment]::GetEnvironmentVariable('Path','User'); if (-not $p) { $p = '' }; $items = @($p -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }); $added = $false; foreach ($d in $dirs) { if ($items -notcontains $d) { $items += $d; $added = $true } }; if ($added) { [Environment]::SetEnvironmentVariable('Path', ($items -join ';'), 'User'); write-output 'SUCCESS' } else { write-output 'ALREADY_EXISTS' }" > %temp%\py_path_result.txt
+            set /p PY_RESULT=<%temp%\py_path_result.txt
+            if "!PY_RESULT!"=="SUCCESS" (
+                echo [SUCCESS] Python added to PATH. Note: You may need to restart your terminal for this to take effect in other windows.
+            ) else (
+                echo [INFO] Python directories already in PATH or failed to add.
+            )
+        )
+    ) else (
+        echo [ERROR] Python not found. Please install Python 3.7+ from https://www.python.org/
+        pause
+        exit /b 1
+    )
+) else (
+    set "PYTHON_CMD=python"
 )
 
 echo [1/4] Python detected:
-python --version
+!PYTHON_CMD! --version
 
 :: Record Python path for agent.bat
-for /f "delims=" %%i in ('powershell -NoProfile -Command "(Get-Command python).Source"') do set "PYTHON_PATH=%%i"
-echo !PYTHON_PATH! > "%ROOT_DIR%\.python_path"
+if "!PYTHON_CMD!"=="python" (
+    for /f "delims=" %%i in ('powershell -NoProfile -Command "(Get-Command python).Source"') do set "PYTHON_FULL_PATH=%%i"
+) else (
+    set "PYTHON_FULL_PATH=!PYTHON_CMD!"
+)
+echo !PYTHON_FULL_PATH! > "%ROOT_DIR%\.python_path"
 
 :: Install dependencies
 echo.
 echo [2/4] Installing dependencies...
-pip install -r "%ROOT_DIR%\requirements.txt"
+!PYTHON_CMD! -m pip install -r "%ROOT_DIR%\requirements.txt"
 if errorlevel 1 (
     echo [ERROR] Dependency installation failed.
     pause

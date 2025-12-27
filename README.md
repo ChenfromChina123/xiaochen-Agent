@@ -31,7 +31,7 @@
 
 ## 使用说明
 1. **端口占用**: 如果端口被占用，表明程序处于热部署状态——请不要重新运行程序。
-2. **一键安装**: Windows 下运行 `xiaochen_agent_v2/scripts/install.bat`（默认仅当前用户加入 PATH），重新打开终端后输入 `agent` 启动。
+2. **一键安装**: Windows 下运行 `xiaochen_agent_v2/scripts/install.bat`。如果系统未将 Python 加入环境变量，脚本会尝试自动搜索常见安装路径并询问是否一键修复。重新打开终端后输入 `agent` 启动。
 3. **Git同步**: 修改代码后，始终使用以下命令同步更改：
    ```bash
    git add .
