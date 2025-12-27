@@ -19,8 +19,32 @@ python --version >nul 2>&1
 if errorlevel 1 (
     echo [INFO] 'python' command not found in PATH. Searching for Python installation...
     
-    :: Try to find python.exe using PowerShell in common locations
-    for /f "delims=" %%p in ('powershell -NoProfile -Command "$paths = @(\"$env:LocalAppData\Programs\Python\", \"C:\Python\", \"$env:ProgramFiles\Python\", \"$env:ProgramFiles(x86)\Python\"); $found = $null; foreach ($p in $paths) { if (Test-Path $p) { $exe = Get-ChildItem -Path $p -Filter python.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1; if ($exe) { $found = $exe.FullName; break } } }; if ($found) { write-output $found } else { exit 1 }"') do set "FOUND_PYTHON=%%p"
+    :: Try to find python.exe using a separate temporary PowerShell script to avoid escaping hell
+    echo $found = $null > "%temp%\find_python.ps1"
+    echo $pyRegistryPaths = @('HKCU:\Software\Python\PythonCore', 'HKLM:\Software\Python\PythonCore'^) >> "%temp%\find_python.ps1"
+    echo foreach ($base in $pyRegistryPaths^) {  >> "%temp%\find_python.ps1"
+    echo     if (Test-Path $base^) {  >> "%temp%\find_python.ps1"
+    echo         $versions = Get-ChildItem $base >> "%temp%\find_python.ps1"
+    echo         foreach ($v in $versions^) {  >> "%temp%\find_python.ps1"
+    echo             $installPath = Get-ItemProperty -Path "$($v.PSPath^)\InstallPath" -ErrorAction SilentlyContinue >> "%temp%\find_python.ps1"
+    echo             if ($installPath -and (Test-Path "$($installPath.ExecutablePath^)"^)^) { $found = $installPath.ExecutablePath; break }  >> "%temp%\find_python.ps1"
+    echo         }  >> "%temp%\find_python.ps1"
+    echo     }  >> "%temp%\find_python.ps1"
+    echo     if ($found^) { break }  >> "%temp%\find_python.ps1"
+    echo } >> "%temp%\find_python.ps1"
+    echo if (-not $found^) {  >> "%temp%\find_python.ps1"
+    echo     $commonPaths = @("$env:LocalAppData\Programs\Python", "C:\Python", "$env:ProgramFiles\Python", "$env:ProgramFiles(x86^)\Python", "C:\Anaconda3", "C:\Miniconda3", "$env:UserProfile\Anaconda3", "$env:UserProfile\Miniconda3"^) >> "%temp%\find_python.ps1"
+    echo     foreach ($p in $commonPaths^) {  >> "%temp%\find_python.ps1"
+    echo         if (Test-Path $p^) {  >> "%temp%\find_python.ps1"
+    echo             $exe = Get-ChildItem -Path $p -Filter python.exe -Recurse -Depth 2 -ErrorAction SilentlyContinue ^| Select-Object -First 1 >> "%temp%\find_python.ps1"
+    echo             if ($exe^) { $found = $exe.FullName; break }  >> "%temp%\find_python.ps1"
+    echo         }  >> "%temp%\find_python.ps1"
+    echo     }  >> "%temp%\find_python.ps1"
+    echo } >> "%temp%\find_python.ps1"
+    echo if ($found^) { write-output "PYTHON_PATH:$found" } else { exit 1 } >> "%temp%\find_python.ps1"
+    
+    for /f "usebackq tokens=2 delims=:" %%p in (`powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%temp%\find_python.ps1" ^| findstr "PYTHON_PATH:"`) do set "FOUND_PYTHON=%%p"
+    del "%temp%\find_python.ps1"
     
     if defined FOUND_PYTHON (
         echo [SUCCESS] Found Python at: !FOUND_PYTHON!
@@ -55,7 +79,7 @@ if errorlevel 1 (
 )
 
 echo [1/4] Python detected:
-!PYTHON_CMD! --version
+"!PYTHON_CMD!" --version
 
 :: Record Python path for agent.bat
 if "!PYTHON_CMD!"=="python" (
@@ -68,7 +92,7 @@ echo !PYTHON_FULL_PATH! > "%ROOT_DIR%\.python_path"
 :: Install dependencies
 echo.
 echo [2/4] Installing dependencies...
-!PYTHON_CMD! -m pip install -r "%ROOT_DIR%\requirements.txt"
+"!PYTHON_CMD!" -m pip install -r "%ROOT_DIR%\requirements.txt"
 if errorlevel 1 (
     echo [ERROR] Dependency installation failed.
     pause
