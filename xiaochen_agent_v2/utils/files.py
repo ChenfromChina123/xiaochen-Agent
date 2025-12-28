@@ -6,6 +6,23 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 
+DEFAULT_MAX_READ_LINES = 250
+DEFAULT_MAX_READ_CHARS = 20000
+
+
+def get_repo_root() -> str:
+    pkg_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    return os.path.abspath(os.path.join(pkg_dir, ".."))
+
+
+def get_logs_root() -> str:
+    return os.path.join(get_repo_root(), "logs")
+
+
+def get_sessions_dir() -> str:
+    return os.path.join(get_logs_root(), "sessions")
+
+
 def search_files(pattern: str, root_dir: str, limit: int = 50) -> List[str]:
     results: List[str] = []
     for root, dirs, files in os.walk(root_dir):
@@ -111,9 +128,14 @@ def read_lines_robust(path_of_file: str) -> List[str]:
 def read_range(path_of_file: str, start_line: int = 1, end_line: Optional[int] = None) -> Tuple[int, int, str]:
     lines_all = read_lines_robust(path_of_file)
     total_lines = len(lines_all)
-    actual_end = end_line if end_line and end_line <= total_lines else total_lines
+    if end_line is None:
+        actual_end = min(total_lines, max(1, start_line) + DEFAULT_MAX_READ_LINES - 1)
+    else:
+        actual_end = end_line if end_line <= total_lines else total_lines
     lines_target = lines_all[start_line - 1 : actual_end]
     content = "\n".join(lines_target)
+    if len(content) > DEFAULT_MAX_READ_CHARS:
+        content = content[:DEFAULT_MAX_READ_CHARS] + "\n... (truncated)"
     return total_lines, actual_end, content
 
 
@@ -124,7 +146,10 @@ def read_range_numbered(
 ) -> Tuple[int, int, str]:
     lines_all = read_lines_robust(path_of_file)
     total_lines = len(lines_all)
-    actual_end = end_line if end_line and end_line <= total_lines else total_lines
+    if end_line is None:
+        actual_end = min(total_lines, max(1, start_line) + DEFAULT_MAX_READ_LINES - 1)
+    else:
+        actual_end = end_line if end_line <= total_lines else total_lines
     lines_target = lines_all[start_line - 1 : actual_end]
     width = len(str(actual_end if actual_end > 0 else 1))
     ext = os.path.splitext(path_of_file)[1].lower()
@@ -147,7 +172,12 @@ def read_range_numbered(
             numbered.append(f"{i:>{width}}: [s={spaces} t={tabs}] {shown}")
     else:
         numbered = [f"{i:>{width}}: {line}" for i, line in enumerate(lines_target, start=start_line)]
-    return total_lines, actual_end, "\n".join(numbered)
+    content = "\n".join(numbered)
+    if len(content) > DEFAULT_MAX_READ_CHARS:
+        content = content[:DEFAULT_MAX_READ_CHARS] + "\n... (truncated)"
+    if end_line is None and actual_end < total_lines:
+        content = content + f"\n... (truncated lines, showing {start_line}-{actual_end} of {total_lines})"
+    return total_lines, actual_end, content
 
 
 def edit_lines(

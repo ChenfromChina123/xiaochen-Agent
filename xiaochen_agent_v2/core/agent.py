@@ -165,6 +165,7 @@ class Agent:
         self.isAutoApproveEnabled = False
         self._lastOperationIndexOfLastChat = 0
         self._lastPrintedOperationIndex = 0
+        self._chatMarkers: List[Tuple[int, int]] = []
         self.interruptHandler = InterruptHandler()
 
     def estimateTokensOfMessages(self, messages: List[Dict[str, str]]) -> int:
@@ -389,6 +390,27 @@ class Agent:
         else:
             print(f"{Fore.RED}No backup data found for rollback{Style.RESET_ALL}")
 
+    def rollbackLastChat(self) -> None:
+        if not self._chatMarkers:
+            print(f"{Fore.RED}No chat to rollback{Style.RESET_ALL}")
+            return
+
+        msg_len, op_len = self._chatMarkers.pop()
+        ops_to_rollback = max(0, len(self.historyOfOperations) - op_len)
+        rolled = 0
+        for _ in range(ops_to_rollback):
+            ok, _ = rollback_last_edit()
+            if not ok:
+                break
+            rolled += 1
+
+        self.historyOfOperations = self.historyOfOperations[:op_len]
+        self.historyOfMessages = self.historyOfMessages[:msg_len]
+        self._lastPrintedOperationIndex = min(self._lastPrintedOperationIndex, len(self.historyOfOperations))
+        self.invalidateProjectTreeCache()
+        self.invalidateUserRulesCache()
+        print(f"{Fore.GREEN}Rolled back last chat (file edits: {rolled}){Style.RESET_ALL}")
+
     def printStatsOfModification(self, ops: List[Tuple[str, int, int]]) -> None:
         """按文件聚合输出本次对话产生的变动统计；如果本次无变动则不输出。"""
         if not ops:
@@ -434,6 +456,7 @@ class Agent:
         Args:
             inputOfUser: 用户在控制台输入的原始文本。
         """
+        chat_marker = (len(self.historyOfMessages), len(self.historyOfOperations))
         self._lastOperationIndexOfLastChat = len(self.historyOfOperations)
         if not inputOfUser.strip() and not self.historyOfMessages:
             print(f"{Fore.YELLOW}Empty input and no history. Waiting for command...{Style.RESET_ALL}")
@@ -496,6 +519,8 @@ class Agent:
                 replyFull = ""
                 fullReasoning = ""
                 hasReasoned = False
+                printedReasoningHeader = False
+                printedAnswerHeader = False
                 usageOfRequest: Optional[Dict[str, Any]] = None
                 print(f"{Fore.GREEN}[小晨终端助手]: ", end="")
                 try:
@@ -531,6 +556,10 @@ class Agent:
                             # 提取推理内容 (reasoning_content)
                             reasoning = delta.get("reasoning_content", "")
                             if reasoning:
+                                if not printedReasoningHeader:
+                                    printedReasoningHeader = True
+                                    printedAnswerHeader = False
+                                    print(f"\n{Fore.CYAN}【思考】{Style.RESET_ALL}\n", end="", flush=True)
                                 if not hasReasoned:
                                     hasReasoned = True
                                 fullReasoning += reasoning
@@ -539,10 +568,10 @@ class Agent:
                             # 提取正文内容
                             token = delta.get("content", "")
                             if token:
-                                if hasReasoned:
-                                    # 如果之前有推理内容，且现在开始输出正文，先换行
-                                    print("\n")
-                                    hasReasoned = False # 只换行一次
+                                if (hasReasoned or printedReasoningHeader) and not printedAnswerHeader:
+                                    printedAnswerHeader = True
+                                    hasReasoned = False
+                                    print(f"\n{Fore.GREEN}【回答】{Style.RESET_ALL}\n", end="", flush=True)
                                 replyFull += token
                                 print(token, end="", flush=True)
                 except requests.exceptions.RequestException as e:
@@ -979,6 +1008,7 @@ class Agent:
 
         self.historyOfMessages = historyWorking
         self.maybePrintModificationStats()
+        self._chatMarkers.append(chat_marker)
 
 
 VoidAgent = Agent

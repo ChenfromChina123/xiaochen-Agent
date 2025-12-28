@@ -6,10 +6,20 @@ import gzip
 import hashlib
 from typing import Any, Dict, List, Optional, Tuple
 
-from .files import cleanup_directory
+from .files import cleanup_directory, get_logs_root
 
 
-def log_request(messages: List[Dict[str, str]], log_dir: str = "logs") -> None:
+def _resolve_log_dir(log_dir: Optional[str]) -> str:
+    base = get_logs_root()
+    if not log_dir:
+        return base
+    if os.path.isabs(log_dir):
+        return log_dir
+    return os.path.join(base, log_dir)
+
+
+def log_request(messages: List[Dict[str, str]], log_dir: Optional[str] = None) -> None:
+    log_dir = _resolve_log_dir(log_dir)
     os.makedirs(log_dir, exist_ok=True)
     
     # 在保存新日志前执行清理，保持最多 50 条 void_chat 日志
@@ -35,9 +45,11 @@ def log_request(messages: List[Dict[str, str]], log_dir: str = "logs") -> None:
 def append_usage_history(
     usage: Dict[str, Any],
     cache: Optional[Dict[str, Any]] = None,
-    history_file: str = os.path.join("logs", "void_usage_history.jsonl"),
+    history_file: Optional[str] = None,
 ) -> None:
     """将模型返回的 usage（以及可选缓存统计）按行追加写入日志文件。"""
+    if not history_file:
+        history_file = os.path.join(get_logs_root(), "void_usage_history.jsonl")
     os.makedirs(os.path.dirname(history_file), exist_ok=True)
     record: Dict[str, Any] = {
         "ts": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -71,8 +83,10 @@ def append_edit_history(
     before_content: str,
     after_content: str,
     meta: Optional[Dict[str, Any]] = None,
-    history_file: str = os.path.join("logs", "void_edit_history.jsonl"),
+    history_file: Optional[str] = None,
 ) -> None:
+    if not history_file:
+        history_file = os.path.join(get_logs_root(), "void_edit_history.jsonl")
     os.makedirs(os.path.dirname(history_file), exist_ok=True)
     record = {
         "ts": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -95,8 +109,10 @@ def _read_history_lines(history_file: str) -> List[str]:
 
 
 def rollback_last_edit(
-    history_file: str = os.path.join("logs", "void_edit_history.jsonl"),
+    history_file: Optional[str] = None,
 ) -> Tuple[bool, str]:
+    if not history_file:
+        history_file = os.path.join(get_logs_root(), "void_edit_history.jsonl")
     lines = _read_history_lines(history_file)
     if not lines:
         return False, "No edit history found"

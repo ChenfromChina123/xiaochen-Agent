@@ -8,20 +8,20 @@ import time
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 
-from ..utils.files import cleanup_directory
+from ..utils.files import cleanup_directory, get_sessions_dir
 
 
 class SessionManager:
     """会话管理器，负责会话历史的持久化存储"""
     
-    def __init__(self, sessions_dir: str = "logs/sessions"):
+    def __init__(self, sessions_dir: Optional[str] = None):
         """
         初始化会话管理器
         
         Args:
             sessions_dir: 会话存储目录路径
         """
-        self.sessions_dir = sessions_dir
+        self.sessions_dir = sessions_dir or get_sessions_dir()
         os.makedirs(self.sessions_dir, exist_ok=True)
 
     def create_autosave_session(self, session_name: Optional[str] = None) -> str:
@@ -232,4 +232,3 @@ class SessionManager:
             return True
         except Exception:
             return False
-

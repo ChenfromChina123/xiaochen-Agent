@@ -143,17 +143,109 @@ def run_cli() -> None:
             agent.interruptHandler.reset()
             
             inputOfUser = input(f"\n{Style.BRIGHT}User: ")
-            if not inputOfUser.strip():
+            raw_cmd = inputOfUser.strip()
+            if not raw_cmd:
                 continue
             
             # 处理特殊命令
-            cmd_lower = inputOfUser.strip().lower()
+            parts = raw_cmd.split()
+            cmd = parts[0].lower()
+            args = parts[1:]
             
-            if cmd_lower == "rollback":
+            if cmd in ["help", "?"]:
+                print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}命令帮助{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+                print("exit / quit           退出（可选择保存会话）")
+                print("save                  保存当前会话")
+                print("clear                 清空当前会话历史")
+                print("rollback              回退最近一次文件修改")
+                print("undo                  一键回退到上一次对话（含文件修改）")
+                print("sessions              查看最近 10 个历史会话")
+                print("load [n]              加载第 n 个历史会话（不退出）")
+                print("new                   新建空会话并继续对话")
+                print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
+                continue
+
+            if cmd == "rollback":
                 agent.rollbackLastOperation()
+                try:
+                    if autosaveFilename:
+                        sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                except Exception:
+                    pass
+                continue
+
+            if cmd == "undo":
+                agent.rollbackLastChat()
+                try:
+                    if autosaveFilename:
+                        sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                except Exception:
+                    pass
                 continue
             
-            if cmd_lower in ["exit", "quit"]:
+            if cmd in ["sessions"]:
+                sessions = sessionManager.list_sessions(limit=10)
+                if not sessions:
+                    print(f"{Fore.YELLOW}没有找到历史会话{Style.RESET_ALL}")
+                    continue
+                print(f"\n{Fore.CYAN}可用的历史会话:{Style.RESET_ALL}")
+                for i, sess in enumerate(sessions, 1):
+                    size_kb = sess['file_size'] / 1024
+                    print(f"{i}. [{sess['timestamp']}] {sess['message_count']} 条消息 ({size_kb:.1f} KB)  {sess['filename']}")
+                continue
+
+            if cmd in ["load"]:
+                sessions = sessionManager.list_sessions(limit=10)
+                if not sessions:
+                    print(f"{Fore.YELLOW}没有找到历史会话{Style.RESET_ALL}")
+                    continue
+                idx_str = args[0] if args else input(f"\n选择会话编号 (1-{len(sessions)}): ").strip()
+                if not idx_str.isdigit():
+                    print(f"{Fore.RED}✗ 会话编号无效{Style.RESET_ALL}")
+                    continue
+                idx = int(idx_str) - 1
+                if idx < 0 or idx >= len(sessions):
+                    print(f"{Fore.RED}✗ 会话编号超出范围{Style.RESET_ALL}")
+                    continue
+                selected_session = sessions[idx]
+                messages = sessionManager.load_session(selected_session["filename"])
+                if not messages:
+                    print(f"{Fore.RED}✗ 加载会话失败{Style.RESET_ALL}")
+                    continue
+                if messages and messages[0].get("role") == "system":
+                    agent.historyOfMessages = messages[1:]
+                else:
+                    agent.historyOfMessages = messages
+                agent.historyOfOperations = []
+                agent.lastFullMessages = []
+                if hasattr(agent, "_chatMarkers"):
+                    agent._chatMarkers = []
+                try:
+                    autosaveFilename = sessionManager.create_autosave_session()
+                    sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                except Exception:
+                    pass
+                print(f"{Fore.GREEN}✓ 已加载会话: {selected_session['filename']}{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}  包含 {len(messages)} 条历史消息{Style.RESET_ALL}")
+                continue
+
+            if cmd in ["new"]:
+                agent.historyOfMessages = []
+                agent.historyOfOperations = []
+                agent.lastFullMessages = []
+                if hasattr(agent, "_chatMarkers"):
+                    agent._chatMarkers = []
+                try:
+                    autosaveFilename = sessionManager.create_autosave_session()
+                    sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                except Exception:
+                    pass
+                print(f"{Fore.GREEN}✓ 已新建会话{Style.RESET_ALL}")
+                continue
+
+            if cmd in ["exit", "quit"]:
                 # 询问是否保存会话
                 if agent.historyOfMessages:
                     save_choice = input(f"{Fore.CYAN}是否保存当前会话? (y/n, 默认n): {Style.RESET_ALL}").strip().lower()
@@ -164,7 +256,7 @@ def run_cli() -> None:
                             print(f"{Fore.GREEN}✓ 会话已保存: {filename}{Style.RESET_ALL}")
                 break
             
-            if cmd_lower == "save":
+            if cmd == "save":
                 if agent.historyOfMessages:
                     session_name = input(f"{Fore.CYAN}输入会话名称 (可选，按回车跳过): {Style.RESET_ALL}").strip()
                     filename = sessionManager.save_session(agent.getFullHistory(), session_name or None)
@@ -174,7 +266,7 @@ def run_cli() -> None:
                     print(f"{Fore.YELLOW}当前没有会话历史{Style.RESET_ALL}")
                 continue
             
-            if cmd_lower == "clear":
+            if cmd == "clear":
                 confirm = input(f"{Fore.YELLOW}确认清空会话历史? (y/n): {Style.RESET_ALL}").strip().lower()
                 if confirm == "y":
                     agent.historyOfMessages = []
