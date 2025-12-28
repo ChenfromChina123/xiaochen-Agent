@@ -1,5 +1,7 @@
 import os
 import sys
+import threading
+import time
 
 from ..core.agent import VoidAgent
 from ..core.config import Config
@@ -45,6 +47,60 @@ def run_cli() -> None:
         }
     }
 
+    def print_model_status() -> None:
+        """
+        打印当前正在使用的模型配置（以当前运行时配置为准）。
+        """
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}当前模型配置{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print(f"Base URL   : {agent.config.baseUrl}")
+        print(f"Model Name : {agent.config.modelName}")
+        print(f"Verify SSL : {agent.config.verifySsl}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+
+    def print_model_presets() -> None:
+        """
+        打印内置模型预设列表。
+        """
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}当前模型（运行时）{Style.RESET_ALL}")
+        print(f"base_url: {agent.config.baseUrl}")
+        print(f"model   : {agent.config.modelName}")
+        print(f"ssl     : {agent.config.verifySsl}")
+        print(f"{Fore.CYAN}{'-'*50}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}可用模型预设{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        for k, v in PRESETS.items():
+            print(f"{k}. {v['name']}")
+            print(f"   base_url: {v['baseUrl']}")
+            print(f"   model   : {v['modelName']}")
+            print(f"   ssl     : {v['verifySsl']}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+
+    def apply_model_config(*, base_url: str, model_name: str, verify_ssl: bool, api_key: str = "") -> None:
+        """
+        应用模型配置到当前运行时，并写入 config.json（便于下次启动复用）。
+
+        Args:
+            base_url: API Base URL
+            model_name: 模型名称
+            verify_ssl: 是否校验 SSL
+            api_key: 可选的 API Key（为空则不修改）
+        """
+        agent.updateModelConfig(
+            apiKey=api_key if api_key.strip() else None,
+            baseUrl=base_url,
+            modelName=model_name,
+            verifySsl=verify_ssl,
+        )
+        if configManager:
+            if api_key.strip():
+                configManager.update_config("api_key", api_key.strip())
+            configManager.update_config("base_url", base_url)
+            configManager.update_config("model_name", model_name)
+            configManager.update_config("verify_ssl", verify_ssl)
+
     # 优先级: 环境变量 > 配置文件 > 用户输入
     apiKey = os.environ.get("VOID_API_KEY") or savedConfig.get("api_key", "")
     baseUrl = os.environ.get("VOID_BASE_URL") or savedConfig.get("base_url", "")
@@ -86,6 +142,9 @@ def run_cli() -> None:
     agent = VoidAgent(config)
     sessionManager = SessionManager()
     autosaveFilename = ""
+    autosaveTitle = ""
+    firstUserInput = ""
+    titleLock = threading.Lock()
     try:
         autosaveFilename = sessionManager.create_autosave_session()
     except Exception:
@@ -103,7 +162,8 @@ def run_cli() -> None:
             print(f"\n{Fore.CYAN}可用的历史会话:{Style.RESET_ALL}")
             for i, sess in enumerate(sessions, 1):
                 size_kb = sess['file_size'] / 1024
-                print(f"{i}. [{sess['timestamp']}] {sess['message_count']} 条消息 ({size_kb:.1f} KB)")
+                title = sess.get("title", "")
+                print(f"{i}. [{sess['timestamp']}] {title}  {sess['message_count']} 条消息 ({size_kb:.1f} KB)")
             
             try:
                 choice_idx = input(f"\n选择会话编号 (1-{len(sessions)}, 或按回车跳过): ").strip()
@@ -137,6 +197,43 @@ def run_cli() -> None:
     print(f"{Fore.CYAN}开始对话 (输入 'exit' 退出, 'save' 保存会话, 'clear' 清空历史){Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
 
+    last_ctrl_c_time = 0.0
+
+    def persist_history(messages: list) -> None:
+        """
+        将最新历史立即写入 autosave，会被 Agent 在每次模型输出后调用。
+        """
+        if not autosaveFilename:
+            return
+        with titleLock:
+            title = autosaveTitle
+            first = firstUserInput
+        sessionManager.update_session(autosaveFilename, messages)
+        if title or first:
+            sessionManager.update_session_meta(autosaveFilename, title=title or None, first_user_input=first or None)
+
+    def start_title_generation(user_input: str) -> None:
+        """
+        并行生成会话标题并写入 autosave 元数据。
+        """
+        nonlocal autosaveTitle
+        try:
+            title = agent.generateSessionTitle(user_input)
+        except Exception:
+            title = ""
+        title = (title or "").strip()
+        if not title:
+            return
+        with titleLock:
+            if autosaveTitle:
+                return
+            autosaveTitle = title
+        try:
+            if autosaveFilename:
+                sessionManager.update_session_meta(autosaveFilename, title=autosaveTitle)
+        except Exception:
+            pass
+
     while True:
         try:
             # 重置中断标志
@@ -164,6 +261,11 @@ def run_cli() -> None:
                 print("sessions              查看最近 10 个历史会话")
                 print("load [n]              加载第 n 个历史会话（不退出）")
                 print("new                   新建空会话并继续对话")
+                print("models                列出模型预设")
+                print("model                 查看当前模型配置")
+                print("model use [n]          切换到第 n 个模型预设")
+                print("model set <url> <name> [ssl]  自定义模型配置 (ssl=true/false)")
+                print("model key <api_key>    设置/更新 API Key（会写入 config.json）")
                 print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
                 continue
 
@@ -193,7 +295,8 @@ def run_cli() -> None:
                 print(f"\n{Fore.CYAN}可用的历史会话:{Style.RESET_ALL}")
                 for i, sess in enumerate(sessions, 1):
                     size_kb = sess['file_size'] / 1024
-                    print(f"{i}. [{sess['timestamp']}] {sess['message_count']} 条消息 ({size_kb:.1f} KB)  {sess['filename']}")
+                    title = sess.get("title", "")
+                    print(f"{i}. [{sess['timestamp']}] {title}  {sess['message_count']} 条消息 ({size_kb:.1f} KB)  {sess['filename']}")
                 continue
 
             if cmd in ["load"]:
@@ -245,15 +348,71 @@ def run_cli() -> None:
                 print(f"{Fore.GREEN}✓ 已新建会话{Style.RESET_ALL}")
                 continue
 
+            if cmd == "models":
+                print_model_presets()
+                continue
+
+            if cmd == "model":
+                if not args:
+                    print_model_status()
+                    continue
+
+                sub = args[0].lower()
+                sub_args = args[1:]
+
+                if sub == "use":
+                    choice = sub_args[0] if sub_args else input("选择模型预设编号: ").strip()
+                    preset = PRESETS.get(choice)
+                    if not preset:
+                        print(f"{Fore.RED}✗ 预设编号无效: {choice}{Style.RESET_ALL}")
+                        continue
+                    apply_model_config(
+                        base_url=preset["baseUrl"],
+                        model_name=preset["modelName"],
+                        verify_ssl=bool(preset["verifySsl"]),
+                    )
+                    print(f"{Fore.GREEN}✓ 已切换模型: {preset['name']}{Style.RESET_ALL}")
+                    print_model_status()
+                    continue
+
+                if sub == "set":
+                    if len(sub_args) < 2:
+                        print(f"{Fore.RED}✗ 用法: model set <base_url> <model_name> [ssl]{Style.RESET_ALL}")
+                        continue
+                    base_url = sub_args[0].strip()
+                    model_name = sub_args[1].strip()
+                    ssl_str = (sub_args[2].strip().lower() if len(sub_args) >= 3 else "true")
+                    verify_ssl = ssl_str in {"1", "true", "yes", "y", "on"}
+                    apply_model_config(base_url=base_url, model_name=model_name, verify_ssl=verify_ssl)
+                    print(f"{Fore.GREEN}✓ 已更新模型配置{Style.RESET_ALL}")
+                    print_model_status()
+                    continue
+
+                if sub == "key":
+                    api_key = sub_args[0] if sub_args else input("请输入 API Key: ").strip()
+                    if not api_key.strip():
+                        print(f"{Fore.RED}✗ API Key 不能为空{Style.RESET_ALL}")
+                        continue
+                    apply_model_config(
+                        base_url=agent.config.baseUrl,
+                        model_name=agent.config.modelName,
+                        verify_ssl=agent.config.verifySsl,
+                        api_key=api_key.strip(),
+                    )
+                    print(f"{Fore.GREEN}✓ API Key 已更新并写入 config.json{Style.RESET_ALL}")
+                    continue
+
+                print(f"{Fore.RED}✗ 未知子命令: {sub}{Style.RESET_ALL}")
+                continue
+
             if cmd in ["exit", "quit"]:
-                # 询问是否保存会话
                 if agent.historyOfMessages:
-                    save_choice = input(f"{Fore.CYAN}是否保存当前会话? (y/n, 默认n): {Style.RESET_ALL}").strip().lower()
-                    if save_choice == "y":
-                        session_name = input(f"{Fore.CYAN}输入会话名称 (可选，按回车跳过): {Style.RESET_ALL}").strip()
-                        filename = sessionManager.save_session(agent.getFullHistory(), session_name or None)
-                        if filename:
-                            print(f"{Fore.GREEN}✓ 会话已保存: {filename}{Style.RESET_ALL}")
+                    try:
+                        if autosaveFilename:
+                            sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                            print(f"{Fore.GREEN}✓ 会话已自动保存: {autosaveFilename}{Style.RESET_ALL}")
+                    except Exception:
+                        pass
                 break
             
             if cmd == "save":
@@ -279,7 +438,17 @@ def run_cli() -> None:
                 continue
             
             # 正常对话
-            agent.chat(inputOfUser)
+            if not firstUserInput:
+                firstUserInput = inputOfUser.strip()
+                try:
+                    if autosaveFilename:
+                        sessionManager.update_session_meta(autosaveFilename, first_user_input=firstUserInput)
+                except Exception:
+                    pass
+                t = threading.Thread(target=start_title_generation, args=(firstUserInput,), daemon=True)
+                t.start()
+
+            agent.chat(inputOfUser, on_history_updated=persist_history)
             try:
                 if autosaveFilename:
                     sessionManager.update_session(autosaveFilename, agent.getFullHistory())
@@ -287,14 +456,27 @@ def run_cli() -> None:
                 pass
             
         except KeyboardInterrupt:
-            # 设置中断标志
             agent.interruptHandler.set_interrupted()
-            print(f"\n{Fore.YELLOW}⚠️  检测到中断信号 (Ctrl+C){Style.RESET_ALL}")
-            print(f"{Fore.YELLOW}   再次按 Ctrl+C 退出程序{Style.RESET_ALL}")
-            
-            # 等待第二次 Ctrl+C 来真正退出
-            try:
-                input(f"{Fore.CYAN}按回车继续，或 Ctrl+C 退出: {Style.RESET_ALL}")
-            except KeyboardInterrupt:
-                print(f"\n{Fore.BLUE}小晨终端助手 正在退出...{Style.RESET_ALL}")
+            now = time.time()
+            if now - last_ctrl_c_time < 1.5:
+                try:
+                    if autosaveFilename:
+                        sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                        print(f"\n{Fore.GREEN}✓ 会话已自动保存: {autosaveFilename}{Style.RESET_ALL}")
+                except Exception:
+                    pass
+                print(f"{Fore.BLUE}小晨终端助手 正在退出...{Style.RESET_ALL}")
                 break
+            last_ctrl_c_time = now
+            try:
+                if autosaveFilename:
+                    sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                    print(f"\n{Fore.GREEN}✓ 会话已自动保存: {autosaveFilename}{Style.RESET_ALL}")
+            except Exception:
+                pass
+            print(f"\n{Fore.YELLOW}⚠️  已请求中断 (Ctrl+C)。为避免误触，不会立即退出。{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}   若要强制退出，请在 1.5 秒内再按一次 Ctrl+C{Style.RESET_ALL}")
+            try:
+                continue
+            except Exception:
+                continue

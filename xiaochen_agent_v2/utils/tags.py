@@ -104,6 +104,8 @@ def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
         if next_tag == "write_file":
             task["path"] = find_substring(inner, "path")
             task["content"] = find_substring(inner, "content", keep_indentation=True)
+            overwrite_str = find_substring(inner, "overwrite")
+            task["overwrite"] = overwrite_str.strip().lower() in {"1", "true", "yes", "y", "on"}
             if not task["path"] or not task["content"]:
                 idx = e_idx + len(end_tag)
                 continue
@@ -151,7 +153,11 @@ def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
                 continue
         elif next_tag == "task_add":
             task["id"] = find_substring(inner, "id")
-            task["content"] = find_substring(inner, "content", keep_indentation=True) or find_substring(inner, "title")
+            task["content"] = (
+                find_substring(inner, "content", keep_indentation=True)
+                or find_substring(inner, "title")
+                or inner.strip()
+            )
             task["status"] = find_substring(inner, "status") or "pending"
             progress_str = find_substring(inner, "progress")
             task["progress"] = int(progress_str) if progress_str.strip() else None
@@ -160,7 +166,11 @@ def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
                 continue
         elif next_tag == "task_update":
             task["id"] = find_substring(inner, "id")
-            task["content"] = find_substring(inner, "content", keep_indentation=True) or find_substring(inner, "title")
+            task["content"] = (
+                find_substring(inner, "content", keep_indentation=True)
+                or find_substring(inner, "title")
+                or ""
+            )
             task["status"] = find_substring(inner, "status")
             progress_str = find_substring(inner, "progress")
             task["progress"] = int(progress_str) if progress_str.strip() else None

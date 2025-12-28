@@ -249,11 +249,20 @@ def edit_lines(
             indent_prefix = ""
             if original_lines:
                 start_idx = ins_line - 1
+                found_idx = None
                 for j in range(start_idx, -1, -1):
                     line = original_lines[j]
                     if line.strip() != "":
-                        indent_prefix = re.match(r"[ \t]*", line).group(0)
+                        found_idx = j
                         break
+                if found_idx is None:
+                    for j in range(start_idx, len(original_lines)):
+                        line = original_lines[j]
+                        if line.strip() != "":
+                            found_idx = j
+                            break
+                if found_idx is not None:
+                    indent_prefix = re.match(r"[ \t]*", original_lines[found_idx]).group(0)
 
             min_ws = None
             for line in insert_lines:
@@ -277,6 +286,43 @@ def edit_lines(
     elif content and insert_at is None and ds > 0:
         # 如果指定了删除但没指定插入位置，且有内容，则默认在删除位置插入（即替换）
         lines[ds - 1 : ds - 1] = content.splitlines()
+
+    def _strip_python_module_header(remain_lines: List[str]) -> List[str]:
+        """
+        移除 Python 文件开头的模块头部块（shebang/encoding/模块 docstring），用于避免重复头部。
+        """
+        i = 0
+        n = len(remain_lines)
+        if i < n and remain_lines[i].startswith("#!"):
+            i += 1
+        while i < n and remain_lines[i].lstrip().startswith("#") and "coding" in remain_lines[i]:
+            i += 1
+        if i < n and remain_lines[i].strip() in {'"""', "'''"}:
+            quote = remain_lines[i].strip()
+            i += 1
+            while i < n:
+                if remain_lines[i].strip() == quote:
+                    i += 1
+                    break
+                i += 1
+        while i < n and remain_lines[i].strip() == "":
+            i += 1
+        return remain_lines[i:]
+
+    ext = os.path.splitext(path_of_file)[1].lower()
+    if ext in {".py", ".pyw"} and insert_at == 1 and ds == 1 and de <= 3 and content:
+        has_new_header = False
+        head_lines = content.splitlines()[:10]
+        if any(l.startswith("#!") for l in head_lines) or any("coding" in l for l in head_lines):
+            has_new_header = True
+        if any(l.strip() in {'"""', "'''"} for l in head_lines):
+            has_new_header = True
+        if has_new_header:
+            inserted_len = len(content.splitlines()) if content else 0
+            if inserted_len > 0 and inserted_len <= len(lines):
+                tail = lines[inserted_len:]
+                if tail and (tail[0].startswith("#!") or "coding" in tail[0] or tail[0].strip() in {'"""', "'''"}):
+                    lines = lines[:inserted_len] + _strip_python_module_header(tail)
 
     after = "\n".join(lines)
     return before, after

@@ -3,7 +3,7 @@ import platform
 import subprocess
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
 import urllib3
@@ -168,6 +168,36 @@ class Agent:
         self._chatMarkers: List[Tuple[int, int]] = []
         self.interruptHandler = InterruptHandler()
 
+    def updateModelConfig(
+        self,
+        *,
+        apiKey: Optional[str] = None,
+        baseUrl: Optional[str] = None,
+        modelName: Optional[str] = None,
+        verifySsl: Optional[bool] = None,
+    ) -> None:
+        """
+        运行时更新模型配置，并刷新依赖配置计算出的字段（如 chat/completions 端点）。
+
+        Args:
+            apiKey: 新的 API Key（可选）
+            baseUrl: 新的 Base URL（可选）
+            modelName: 新的模型名称（可选）
+            verifySsl: 是否验证 SSL（可选）
+        """
+        if apiKey is not None and str(apiKey).strip():
+            self.config.apiKey = str(apiKey).strip()
+        if baseUrl is not None and str(baseUrl).strip():
+            self.config.baseUrl = str(baseUrl).strip()
+        if modelName is not None and str(modelName).strip():
+            self.config.modelName = str(modelName).strip()
+        if verifySsl is not None:
+            self.config.verifySsl = bool(verifySsl)
+            if not self.config.verifySsl:
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        self.endpointOfChat = f"{self.config.baseUrl.rstrip('/')}/chat/completions"
+
     def estimateTokensOfMessages(self, messages: List[Dict[str, str]]) -> int:
         totalChars = 0
         for msg in messages:
@@ -248,6 +278,7 @@ class Agent:
 6. **NO TASK = NO TAGS**: Reply with natural language only if no action is needed.
 7. **FOCUS FIRST**: Only do what the user explicitly asked.
 8. **STOP AFTER TASK**: After completing the requested task(s), respond briefly.
+9. **EDIT > REWRITE**: If a file already exists, prefer <edit_lines> and avoid rewriting the whole file.
 
 ## 📋 USER CONTEXT
 - User rules, current directory, and task list are provided in the user message to keep this system prompt stable for caching.
@@ -261,7 +292,8 @@ class Agent:
   <read_file><path>...</path><start_line>1</start_line><end_line>200</end_line></read_file>
   - Python files annotate indentation as: [s=<spaces> t=<tabs>], and whitespace-only lines show as <WS_ONLY>.
 - Write file:
-  <write_file><path>...</path><content>...</content></write_file>
+  <write_file><path>...</path><content>...</content><overwrite>false</overwrite></write_file>
+  - Use write_file ONLY for new files. If the target file already exists, you MUST use edit_lines, unless overwrite=true is explicitly set.
 - Edit lines:
   <edit_lines><path>...</path><delete_start>10</delete_start><delete_end>20</delete_end><insert_at>10</insert_at><auto_indent>true</auto_indent><content>...</content></edit_lines>
   - insert_at refers to original line numbers; the tool handles offsets.
@@ -269,7 +301,9 @@ class Agent:
 - Run command:
   <run_command><command>...</command><is_long_running>false</is_long_running></run_command>
 - Task list:
-  <task_add>...</task_add> <task_update>...</task_update> <task_list></task_list> <task_delete>...</task_delete> <task_clear></task_clear>
+  <task_add><content>...</content><status>pending</status></task_add>
+  <task_update><id>T1</id><status>in_progress</status></task_update>
+  <task_list></task_list> <task_delete><id>T1</id></task_delete> <task_clear></task_clear>
 """
 
     def invalidateProjectTreeCache(self) -> None:
@@ -313,9 +347,26 @@ class Agent:
         return self.cacheOfProjectTree
 
     def printToolResult(self, text: str, maxChars: int = 8000) -> None:
-        """打印工具执行结果（已禁用，避免重复显示）"""
-        # 不打印工具结果，避免在用户终端显示过多信息
-        return
+        """
+        打印工具执行结果的关键摘要。
+
+        仅输出失败信息与少量关键成功摘要，避免 read_file 等内容刷屏。
+        """
+        if not text:
+            return
+        head = text[:maxChars]
+        first_line = head.splitlines()[:1]
+        first_line = first_line[0] if first_line else head
+
+        if first_line.startswith("FAILURE:"):
+            print(format_observation_display("\n".join(head.splitlines()[:12])))
+            return
+        if first_line.startswith("SUCCESS: Command"):
+            print(format_observation_display("\n".join(head.splitlines()[:8])))
+            return
+        if first_line.startswith("SUCCESS: Edited") or first_line.startswith("SUCCESS: Saved to"):
+            print(format_observation_display(first_line))
+            return
 
     def printTaskProgress(self) -> None:
         content = self.taskManager.render()
@@ -449,12 +500,67 @@ class Agent:
         """返回包含系统提示词的完整历史记录。"""
         return [self.getSystemMessage()] + self.historyOfMessages
 
-    def chat(self, inputOfUser: str):
+    def generateSessionTitle(self, firstUserInput: str) -> str:
+        """
+        使用当前模型快速生成一个简短会话标题。
+
+        Args:
+            firstUserInput: 用户第一条输入（原始文本）
+
+        Returns:
+            简短标题（可能为空）
+        """
+        text = (firstUserInput or "").strip()
+        if not text:
+            return ""
+        prompt = text.splitlines()[0].strip()
+        if len(prompt) > 200:
+            prompt = prompt[:200]
+
+        headers = {"Authorization": f"Bearer {self.config.apiKey}", "Content-Type": "application/json"}
+        payload = {
+            "model": self.config.modelName,
+            "messages": [
+                {"role": "system", "content": "你是一个会话标题生成器。只输出标题本身，不要解释。"},
+                {
+                    "role": "user",
+                    "content": f"基于用户输入生成一个简短中文标题（6-12字，最多16字）：\n{prompt}",
+                },
+            ],
+            "temperature": 0.2,
+            "stream": False,
+            "max_tokens": 60,
+        }
+        try:
+            resp = requests.post(
+                self.endpointOfChat,
+                headers=headers,
+                json=payload,
+                timeout=20,
+                verify=self.config.verifySsl,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            choices = data.get("choices") if isinstance(data, dict) else None
+            if not choices:
+                return ""
+            msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+            content = (msg.get("content") if isinstance(msg, dict) else "") or ""
+            title = str(content).strip().strip('"').strip()
+            title = title.replace("\r", " ").replace("\n", " ").strip()
+            if len(title) > 16:
+                title = title[:16]
+            return title
+        except Exception:
+            return ""
+
+    def chat(self, inputOfUser: str, *, on_history_updated: Optional[Callable[[List[Dict[str, str]]], None]] = None):
         """
         处理用户输入并启动 AI 代理的多轮任务执行循环。
         
         Args:
             inputOfUser: 用户在控制台输入的原始文本。
+            on_history_updated: 可选回调，用于在关键时刻持久化历史（例如自动保存会话）。
         """
         chat_marker = (len(self.historyOfMessages), len(self.historyOfOperations))
         self._lastOperationIndexOfLastChat = len(self.historyOfOperations)
@@ -640,6 +746,11 @@ class Agent:
                             pass
 
                 historyWorking.append({"role": "assistant", "content": replyFull})
+                if on_history_updated is not None:
+                    try:
+                        on_history_updated([msgSystem] + list(historyWorking))
+                    except Exception:
+                        pass
                 tasks = parse_stack_of_tags(replyFull)
 
                 if not tasks:
@@ -799,7 +910,16 @@ class Agent:
                         path = os.path.abspath(t["path"])
                         content = t["content"]
                         try:
-                            existedBefore = os.path.exists(path)
+                            overwrite = bool(t.get("overwrite") or False)
+                            if os.path.exists(path) and not overwrite:
+                                obs = (
+                                    "FAILURE: Refuse to overwrite existing file via write_file. "
+                                    "Use edit_lines, or set <overwrite>true</overwrite> explicitly."
+                                )
+                                observations.append(obs)
+                                self.printToolResult(obs)
+                                continue
+
                             self.backupFile(path)
                             ensure_parent_dir(path)
                             before_content = self.cacheOfBackups.get(path, "")
@@ -993,6 +1113,11 @@ class Agent:
 
                 if observations:
                     historyWorking.append({"role": "user", "content": "\n".join(observations)})
+                    if on_history_updated is not None:
+                        try:
+                            on_history_updated([msgSystem] + list(historyWorking))
+                        except Exception:
+                            pass
                 if isCancelled:
                     break
                 if didExecuteAnyTask and self.config.stopAfterFirstToolExecution:
