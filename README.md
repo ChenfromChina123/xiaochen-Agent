@@ -6,6 +6,9 @@
 ## 目录结构
 | 目录/文件 | 描述 |
 |-----------|------|
+| `run.bat` | **推荐：Windows 一键启动脚本 (自动配置环境并启动)** |
+| `build_exe.bat` | Windows 打包工具 (生成独立的 .exe 文件) |
+| `requirements.txt` | 项目核心依赖列表 |
 | `cpp_projects/` | C++示例项目和代码 |
 | `python_snake_game/` | Python版贪吃蛇游戏实现 |
 | `snake_game/` | 网页版贪吃蛇游戏 |
@@ -23,6 +26,8 @@
 | `test_doubao.py` | 豆包服务/工具集成测试脚本 |
 
 ## 关键文件说明
+- `run.bat`: Windows 下的一键启动器。它会自动创建 Python 虚拟环境、安装依赖并启动智能体，无需手动干预。
+- `build_exe.bat`: Windows 下的打包脚本。运行后会在 `dist/` 目录下生成 `xiaochen_agent.exe`，该文件可以分发给没有安装 Python 的用户直接运行。
 - `cpp_projects/`: C++示例项目，包含基本的C++编程示例和构建配置
 - `python_snake_game/snake_game.py`: Python版贪吃蛇游戏主程序
 - `snake_game/index.html`: 网页版贪吃蛇游戏主文件
@@ -30,8 +35,10 @@
 - `test_doubao.py`: 测试豆包服务的集成，包括API调用和功能检查
 
 ## 使用说明
-1. **端口占用**: 如果端口被占用，表明程序处于热部署状态——请不要重新运行程序。
-2. **一键安装**: Windows 下运行 `xiaochen_agent_v2/scripts/install.bat`。如果系统未将 Python 加入环境变量，脚本会尝试自动搜索常见安装路径并询问是否一键修复。重新打开终端后输入 `agent` 启动。
+1. **一键启动 (Windows)**: 直接在根目录双击运行 `run.bat`。该脚本会自动处理虚拟环境和依赖安装。
+2. **打包为 EXE**: 如果您希望生成一个不需要 Python 环境即可运行的独立程序，请双击运行 `build_exe.bat`。打包完成后，在生成的 `dist` 文件夹中找到 `xiaochen_agent.exe` 即可使用。
+3. **端口占用**: 如果端口被占用，表明程序处于热部署状态——请不要重新运行程序。
+3. **传统安装方式**: Windows 下运行 `xiaochen_agent_v2/scripts/install.bat`。如果系统未将 Python 加入环境变量，脚本会尝试自动搜索常见安装路径并询问是否一键修复。重新打开终端后输入 `agent` 启动。
 3. **Git同步**: 修改代码后，始终使用以下命令同步更改：
    ```bash
    git add .
