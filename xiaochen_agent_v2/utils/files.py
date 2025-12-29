@@ -143,6 +143,7 @@ def read_range_numbered(
     path_of_file: str,
     start_line: int = 1,
     end_line: Optional[int] = None,
+    indent_mode: str = "smart",
 ) -> Tuple[int, int, str]:
     lines_all = read_lines_robust(path_of_file)
     total_lines = len(lines_all)
@@ -153,23 +154,48 @@ def read_range_numbered(
     lines_target = lines_all[start_line - 1 : actual_end]
     width = len(str(actual_end if actual_end > 0 else 1))
     ext = os.path.splitext(path_of_file)[1].lower()
-    if ext in {".py", ".pyw"}:
-        numbered: List[str] = []
-        for i, line in enumerate(lines_target, start=start_line):
-            spaces = 0
-            tabs = 0
-            for ch in line:
-                if ch == " ":
-                    spaces += 1
-                elif ch == "\t":
-                    tabs += 1
-                else:
-                    break
-            if line and line.strip() == "":
-                shown = "<WS_ONLY>"
-            else:
-                shown = line
-            numbered.append(f"{i:>{width}}: [s={spaces} t={tabs}] {shown}")
+    mode = str(indent_mode or "smart").strip().lower()
+
+    def _analyze_python_indent(lines: List[str]) -> Tuple[str, int, bool]:
+        has_tab = False
+        has_space = False
+        has_mixed = False
+        widths: List[int] = []
+        for ln in lines:
+            if not ln or ln.strip() == "":
+                continue
+            ws = re.match(r"[ \t]*", ln).group(0)
+            if "\t" in ws and " " in ws:
+                has_mixed = True
+            if "\t" in ws:
+                has_tab = True
+            if " " in ws:
+                has_space = True
+            width_est = len(ws.replace("\t", "    "))
+            if width_est > 0:
+                widths.append(width_est)
+        mixed = has_mixed or (has_tab and has_space)
+        if mixed:
+            style = "mixed"
+        elif has_tab:
+            style = "tabs"
+        else:
+            style = "spaces"
+        indent_size = 4
+        if widths:
+            widths = sorted(set(widths))
+            indent_size = widths[0] if widths[0] > 0 else 4
+        return style, indent_size, mixed
+
+    if ext in {".py", ".pyw"} and mode in {"smart", "header", "always", "level"}:
+        style, indent_size, mixed = _analyze_python_indent(lines_all)
+        header = f"indent_style: {style}; indent_size: {indent_size}; mixed: {mixed}"
+
+        numbered = [f"{i:>{width}}: {line if line.strip() != '' else '<WS_ONLY>'}" for i, line in enumerate(lines_target, start=start_line)]
+        if mode in {"always", "level"}:
+            numbered = numbered
+        if mode in {"smart", "header", "always", "level"}:
+            numbered = [header] + numbered
     else:
         numbered = [f"{i:>{width}}: {line}" for i, line in enumerate(lines_target, start=start_line)]
     content = "\n".join(numbered)

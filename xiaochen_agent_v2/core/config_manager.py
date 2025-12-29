@@ -18,7 +18,21 @@ class ConfigManager:
         "model_name": "deepseek-chat",
         "verify_ssl": True,
         "auto_save_session": False,
-        "max_cycles": 30
+        "max_cycles": 30,
+        "token_threshold": 30000,
+        "whitelisted_tools": [
+            "search_files",
+            "search_in_files",
+            "read_file",
+            "task_add",
+            "task_update",
+            "task_delete",
+            "task_list",
+            "task_clear",
+        ],
+        "whitelisted_commands": ["ls", "dir", "pwd", "whoami", "echo", "cat", "type"],
+        "read_indent_mode": "header",
+        "python_validate_ruff": "auto"
     }
     
     def __init__(self, config_file: str = DEFAULT_CONFIG_FILE):
@@ -128,4 +142,3 @@ class ConfigManager:
             return True
         except Exception:
             return False
-

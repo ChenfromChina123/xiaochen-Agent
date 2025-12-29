@@ -1,4 +1,13 @@
-import requests
+import unittest
+
+try:
+    import requests
+except Exception:
+    requests = None
+
+if requests is None:
+    raise unittest.SkipTest("requests 未安装，跳过示例脚本导入")
+
 import json
 import urllib3
 

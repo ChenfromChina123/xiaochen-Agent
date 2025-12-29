@@ -106,6 +106,11 @@ def run_cli() -> None:
     baseUrl = os.environ.get("VOID_BASE_URL") or savedConfig.get("base_url", "")
     modelName = os.environ.get("VOID_MODEL") or savedConfig.get("model_name", "")
     verifySsl = savedConfig.get("verify_ssl", True)
+    whitelistedTools = savedConfig.get("whitelisted_tools")
+    whitelistedCommands = savedConfig.get("whitelisted_commands")
+    readIndentMode = savedConfig.get("read_indent_mode", "smart")
+    pythonValidateRuff = savedConfig.get("python_validate_ruff", "auto")
+    tokenThreshold = savedConfig.get("token_threshold", 30000)
 
     if not apiKey:
         print(f"{Fore.CYAN}=== 小晨终端助手 (XIAOCHEN_TERMINAL) ==={Style.RESET_ALL}")
@@ -134,12 +139,19 @@ def run_cli() -> None:
             print(f"{Fore.GREEN}  下次启动将自动使用此配置{Style.RESET_ALL}")
 
     config = Config(
-        apiKey=apiKey, 
-        baseUrl=baseUrl or "https://api.deepseek.com", 
+        apiKey=apiKey,
+        baseUrl=baseUrl or "https://api.deepseek.com",
         modelName=modelName or "deepseek-chat",
-        verifySsl=verifySsl
+        verifySsl=verifySsl,
+        tokenThreshold=int(tokenThreshold) if str(tokenThreshold).strip().isdigit() else 30000,
     )
+    if isinstance(whitelistedTools, list):
+        config.whitelistedTools = whitelistedTools
+    if isinstance(whitelistedCommands, list):
+        config.whitelistedCommands = whitelistedCommands
     agent = VoidAgent(config)
+    agent.readIndentMode = str(readIndentMode or "smart")
+    agent.pythonValidateRuff = str(pythonValidateRuff or "auto")
     sessionManager = SessionManager()
     autosaveFilename = ""
     autosaveTitle = ""
@@ -199,6 +211,88 @@ def run_cli() -> None:
 
     last_ctrl_c_time = 0.0
 
+    def _normalize_unique_list(values: list) -> list:
+        items = []
+        seen = set()
+        for v in values:
+            s = str(v or "").strip()
+            if not s:
+                continue
+            key = s.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(s)
+        return items
+
+    def _persist_whitelist() -> None:
+        if not configManager:
+            return
+        configManager.update_config("whitelisted_tools", list(agent.config.whitelistedTools))
+        configManager.update_config("whitelisted_commands", list(agent.config.whitelistedCommands))
+
+    def print_whitelist() -> None:
+        print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}白名单（自动执行，无需确认）{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        tools = list(agent.config.whitelistedTools or [])
+        cmds = list(agent.config.whitelistedCommands or [])
+        tools.sort(key=lambda x: str(x).lower())
+        cmds.sort(key=lambda x: str(x).lower())
+        print("Tools:")
+        for t in tools:
+            print(f"  - {t}")
+        print("Commands (base cmd):")
+        for c in cmds:
+            print(f"  - {c}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
+
+    def print_help_main() -> None:
+        print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}命令帮助{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print("sessions -help        会话管理（查看/加载/新建）")
+        print("model -help           模型管理（查看/切换/配置）")
+        print("whitelist -help       白名单管理（查看/修改）")
+        print("rollback              回退最近一次文件修改")
+        print("undo                  一键回退到上一次对话（含文件修改）")
+        print("save                  保存当前会话")
+        print("clear                 清空当前会话历史")
+        print("exit / quit           退出（自动保存 autosave）")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
+
+    def print_help_sessions() -> None:
+        print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}sessions -help{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print("sessions              查看最近 10 个历史会话")
+        print("load [n]              加载第 n 个历史会话（不退出）")
+        print("new                   新建空会话并继续对话")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
+
+    def print_help_model() -> None:
+        print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}model -help{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print("models                          列出模型预设")
+        print("model                           查看当前模型配置")
+        print("model use [n]                   切换到第 n 个模型预设")
+        print("model set <url> <name> [ssl]     自定义模型配置 (ssl=true/false)")
+        print("model key <api_key>             设置/更新 API Key（写入 config.json）")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
+
+    def print_help_whitelist() -> None:
+        print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}whitelist -help{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print("whitelist                       查看白名单")
+        print("whitelist tool add <name>        添加工具白名单")
+        print("whitelist tool remove <name>     移除工具白名单")
+        print("whitelist cmd add <basecmd>      添加命令白名单（仅匹配首段命令）")
+        print("whitelist cmd remove <basecmd>   移除命令白名单")
+        print("whitelist reset                 重置为默认白名单")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
+
     def persist_history(messages: list) -> None:
         """
         将最新历史立即写入 autosave，会被 Agent 在每次模型输出后调用。
@@ -250,23 +344,7 @@ def run_cli() -> None:
             args = parts[1:]
             
             if cmd in ["help", "?"]:
-                print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
-                print(f"{Fore.CYAN}命令帮助{Style.RESET_ALL}")
-                print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
-                print("exit / quit           退出（可选择保存会话）")
-                print("save                  保存当前会话")
-                print("clear                 清空当前会话历史")
-                print("rollback              回退最近一次文件修改")
-                print("undo                  一键回退到上一次对话（含文件修改）")
-                print("sessions              查看最近 10 个历史会话")
-                print("load [n]              加载第 n 个历史会话（不退出）")
-                print("new                   新建空会话并继续对话")
-                print("models                列出模型预设")
-                print("model                 查看当前模型配置")
-                print("model use [n]          切换到第 n 个模型预设")
-                print("model set <url> <name> [ssl]  自定义模型配置 (ssl=true/false)")
-                print("model key <api_key>    设置/更新 API Key（会写入 config.json）")
-                print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
+                print_help_main()
                 continue
 
             if cmd == "rollback":
@@ -288,6 +366,9 @@ def run_cli() -> None:
                 continue
             
             if cmd in ["sessions"]:
+                if args and args[0].lower() in {"-help", "help", "?"}:
+                    print_help_sessions()
+                    continue
                 sessions = sessionManager.list_sessions(limit=10)
                 if not sessions:
                     print(f"{Fore.YELLOW}没有找到历史会话{Style.RESET_ALL}")
@@ -353,6 +434,9 @@ def run_cli() -> None:
                 continue
 
             if cmd == "model":
+                if args and args[0].lower() in {"-help", "help", "?"}:
+                    print_help_model()
+                    continue
                 if not args:
                     print_model_status()
                     continue
@@ -403,6 +487,76 @@ def run_cli() -> None:
                     continue
 
                 print(f"{Fore.RED}✗ 未知子命令: {sub}{Style.RESET_ALL}")
+                continue
+
+            if cmd == "whitelist":
+                if args and args[0].lower() in {"-help", "help", "?"}:
+                    print_help_whitelist()
+                    continue
+                if not args or args[0].lower() in {"list", "show"}:
+                    print_whitelist()
+                    continue
+
+                sub = args[0].lower()
+                sub_args = args[1:]
+                if sub == "reset":
+                    defaults = Config(
+                        apiKey=agent.config.apiKey,
+                        baseUrl=agent.config.baseUrl,
+                        modelName=agent.config.modelName,
+                        verifySsl=agent.config.verifySsl,
+                    )
+                    agent.config.whitelistedTools = list(defaults.whitelistedTools)
+                    agent.config.whitelistedCommands = list(defaults.whitelistedCommands)
+                    _persist_whitelist()
+                    print(f"{Fore.GREEN}✓ 白名单已重置为默认值{Style.RESET_ALL}")
+                    print_whitelist()
+                    continue
+
+                if len(sub_args) < 2:
+                    print_help_whitelist()
+                    continue
+
+                kind = sub
+                op = sub_args[0].lower()
+                name = sub_args[1].strip() if len(sub_args) >= 2 else ""
+                if not name:
+                    print_help_whitelist()
+                    continue
+
+                if kind == "tool":
+                    tools = list(agent.config.whitelistedTools or [])
+                    if op == "add":
+                        tools.append(name)
+                        agent.config.whitelistedTools = _normalize_unique_list(tools)
+                        _persist_whitelist()
+                        print(f"{Fore.GREEN}✓ 已添加工具白名单: {name}{Style.RESET_ALL}")
+                        continue
+                    if op == "remove":
+                        agent.config.whitelistedTools = [t for t in tools if str(t).lower() != name.lower()]
+                        _persist_whitelist()
+                        print(f"{Fore.GREEN}✓ 已移除工具白名单: {name}{Style.RESET_ALL}")
+                        continue
+
+                if kind in {"cmd", "command"}:
+                    cmds = list(agent.config.whitelistedCommands or [])
+                    base = name.split()[0].strip().lower()
+                    if not base:
+                        print_help_whitelist()
+                        continue
+                    if op == "add":
+                        cmds.append(base)
+                        agent.config.whitelistedCommands = _normalize_unique_list(cmds)
+                        _persist_whitelist()
+                        print(f"{Fore.GREEN}✓ 已添加命令白名单: {base}{Style.RESET_ALL}")
+                        continue
+                    if op == "remove":
+                        agent.config.whitelistedCommands = [c for c in cmds if str(c).lower() != base]
+                        _persist_whitelist()
+                        print(f"{Fore.GREEN}✓ 已移除命令白名单: {base}{Style.RESET_ALL}")
+                        continue
+
+                print_help_whitelist()
                 continue
 
             if cmd in ["exit", "quit"]:

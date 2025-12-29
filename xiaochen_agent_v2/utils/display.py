@@ -37,6 +37,11 @@ def format_tool_display(task: Dict[str, Any]) -> str:
         insert_at = task.get("insert_at")
         return f"✏️  编辑: {path} (删除 {delete_start}-{delete_end}, 插入于 {insert_at})"
     
+    elif task_type == "replace_in_file":
+        path = task.get("path", "")
+        count = task.get("count", 1)
+        return f"🔁 替换: {path} (最多 {count} 处)"
+    
     elif task_type == "run_command":
         cmd = str(task.get("command", "")).strip().splitlines()[0] if task.get("command") else ""
         if len(cmd) > 60:

@@ -8,6 +8,7 @@ class Config:
     baseUrl: str
     modelName: str
     maxCycles: int = 30
+    tokenThreshold: int = 30000
     stopAfterFirstToolExecution: bool = False
     verifySsl: bool = True
     whitelistedTools: List[str] = field(

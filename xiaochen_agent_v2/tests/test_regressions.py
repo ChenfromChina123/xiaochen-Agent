@@ -3,7 +3,7 @@ import tempfile
 import unittest
 import json
 
-from xiaochen_agent_v2.utils.files import edit_lines, read_lines_robust
+from xiaochen_agent_v2.utils.files import edit_lines, read_lines_robust, read_range_numbered
 from xiaochen_agent_v2.utils.tags import parse_stack_of_tags
 from xiaochen_agent_v2.core.session import SessionManager
 
@@ -114,6 +114,51 @@ class TestTaskTagParsing(unittest.TestCase):
         self.assertEqual(tasks[0]["type"], "task_add")
         self.assertEqual(tasks[0]["content"], "修复命令行模型切换")
 
+    def test_task_add_rejects_unclosed_content_tag(self) -> None:
+        text = "<task_add><content>未闭合</task_add>"
+        tasks = parse_stack_of_tags(text)
+        self.assertEqual(tasks, [])
+
+    def test_run_command_rejects_unclosed_command_tag(self) -> None:
+        text = "<run_command><command>echo 1</run_command>"
+        tasks = parse_stack_of_tags(text)
+        self.assertEqual(tasks, [])
+
+    def test_read_file_rejects_missing_range(self) -> None:
+        text = "<read_file><path>a.py</path></read_file>"
+        tasks = parse_stack_of_tags(text)
+        self.assertEqual(tasks, [])
+
+    def test_read_file_parses_required_range(self) -> None:
+        text = "<read_file><path>a.py</path><start_line>10</start_line><end_line>20</end_line></read_file>"
+        tasks = parse_stack_of_tags(text)
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["type"], "read_file")
+        self.assertEqual(tasks[0]["path"], "a.py")
+        self.assertEqual(tasks[0]["start_line"], 10)
+        self.assertEqual(tasks[0]["end_line"], 20)
+
+    def test_replace_in_file_parses_basic_fields(self) -> None:
+        text = (
+            "<replace_in_file>"
+            "<path>a.py</path>"
+            "<search>old</search>"
+            "<replace>new</replace>"
+            "<count>2</count>"
+            "<regex>false</regex>"
+            "<auto_indent>true</auto_indent>"
+            "</replace_in_file>"
+        )
+        tasks = parse_stack_of_tags(text)
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["type"], "replace_in_file")
+        self.assertEqual(tasks[0]["path"], "a.py")
+        self.assertEqual(tasks[0]["search"], "old")
+        self.assertEqual(tasks[0]["replace"], "new")
+        self.assertEqual(tasks[0]["count"], 2)
+        self.assertEqual(tasks[0]["regex"], False)
+        self.assertEqual(tasks[0]["auto_indent"], True)
+
 
 class TestSessionTitle(unittest.TestCase):
     """覆盖会话标题生成与默认回退逻辑。"""
@@ -158,6 +203,79 @@ class TestSessionTitle(unittest.TestCase):
             sessions = sm.list_sessions(limit=10)
             self.assertEqual(len(sessions), 1)
             self.assertEqual(sessions[0]["title"], "第一句话")
+
+
+class TestReadIndentHeader(unittest.TestCase):
+    def test_read_range_numbered_header_mode_emits_single_header(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "demo.py")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("def f():\n    return 1\n")
+            _total, _end, content = read_range_numbered(path, 1, None, indent_mode="header")
+            self.assertTrue(content.splitlines()[0].startswith("indent_style:"))
+            self.assertNotIn("[s=", content)
+
+
+class TestOptionalRuffDetection(unittest.TestCase):
+    def test_detect_ruff_runner_returns_none_when_missing(self) -> None:
+        from unittest import mock
+        from xiaochen_agent_v2.core.config import Config
+        from xiaochen_agent_v2.core.agent import Agent
+
+        cfg = Config(apiKey="x", baseUrl="http://x", modelName="m")
+        agent = Agent(cfg)
+        agent.pythonValidateRuff = "auto"
+        with mock.patch("shutil.which", return_value=None):
+            with mock.patch("subprocess.run") as run:
+                run.return_value.returncode = 1
+                runner = agent._detect_ruff_runner()
+                self.assertIsNone(runner)
+
+
+class TestHistoryCompaction(unittest.TestCase):
+    def test_compact_history_inserts_persistent_summary_and_keeps_tail(self) -> None:
+        from unittest import mock
+        from xiaochen_agent_v2.core.config import Config
+        from xiaochen_agent_v2.core.agent import Agent
+
+        cfg = Config(apiKey="x", baseUrl="http://x", modelName="m", tokenThreshold=10)
+        agent = Agent(cfg)
+        msg_system = {"role": "system", "content": "sys"}
+        history = [
+            {"role": "user", "content": "u1 " * 50},
+            {"role": "assistant", "content": "a1 " * 50},
+            {"role": "user", "content": "u2 " * 50},
+            {"role": "assistant", "content": "a2 " * 50},
+        ]
+        with mock.patch.object(agent, "_generate_summary_via_model", return_value="SUM"):
+            new_history, did = agent._maybe_compact_history(history, msg_system, keep_last_messages=2)
+        self.assertTrue(did)
+        self.assertEqual(new_history[0]["role"], "system")
+        self.assertTrue(str(new_history[0]["content"]).startswith("【长期摘要】"))
+        self.assertEqual(new_history[1:], history[-2:])
+
+    def test_compact_history_replaces_existing_persistent_summary(self) -> None:
+        from unittest import mock
+        from xiaochen_agent_v2.core.config import Config
+        from xiaochen_agent_v2.core.agent import Agent
+
+        cfg = Config(apiKey="x", baseUrl="http://x", modelName="m", tokenThreshold=10)
+        agent = Agent(cfg)
+        msg_system = {"role": "system", "content": "sys"}
+        history = [
+            {"role": "system", "content": "【长期摘要】\nOLD"},
+            {"role": "user", "content": "u1 " * 50},
+            {"role": "assistant", "content": "a1 " * 50},
+            {"role": "user", "content": "u2 " * 50},
+            {"role": "assistant", "content": "a2 " * 50},
+        ]
+        with mock.patch.object(agent, "_generate_summary_via_model", return_value="NEW"):
+            new_history, did = agent._maybe_compact_history(history, msg_system, keep_last_messages=2)
+        self.assertTrue(did)
+        self.assertEqual(new_history[0]["role"], "system")
+        self.assertIn("NEW", str(new_history[0]["content"]))
+        self.assertNotIn("OLD", str(new_history[0]["content"]))
+        self.assertEqual(new_history[1:], history[-2:])
 
 
 if __name__ == "__main__":
