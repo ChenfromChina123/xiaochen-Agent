@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: 设置控制台编码为 UTF-8
+:: 强制设置控制台编码为 UTF-8
 chcp 65001 >nul
 
 echo ========================================
@@ -11,17 +11,22 @@ echo ========================================
 echo.
 
 :: 1. 检查 Python 环境
-python --version >nul 2>&1
+set "PY_CMD=python"
+%PY_CMD% --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [错误] 未检测到 Python，打包需要 Python 环境。
-    pause
-    exit /b 1
+    set "PY_CMD=py"
+    !PY_CMD! --version >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo [错误] 未检测到 Python，打包需要 Python 环境。
+        pause
+        exit /b 1
+    )
 )
 
 :: 2. 创建/激活虚拟环境以保持打包环境纯净
 if not exist ".venv" (
     echo [1/4] 正在创建打包专用虚拟环境...
-    python -m venv .venv
+    %PY_CMD% -m venv .venv
 )
 
 echo [2/4] 正在安装打包依赖 (pyinstaller)...
@@ -34,17 +39,13 @@ echo [3/4] 正在开始打包为单文件 EXE (这可能需要几分钟)...
 echo.
 
 :: 使用 pyinstaller 打包
-:: --onefile: 打包为单个 exe
-:: --name: 程序名称
-:: --console: 显示控制台窗口
-:: --clean: 清理临时文件
-:: --add-data: 包含必要的静态资源 (Windows 下使用分号 ;)
+:: 续行符 ^ 后面不能有任何空格，否则会导致命令断开
 pyinstaller --onefile ^
-            --name "xiaochen_agent" ^
-            --console ^
-            --clean ^
-            --add-data "xiaochen_agent_v2;xiaochen_agent_v2" ^
-            launcher.py
+--name "xiaochen_agent" ^
+--console ^
+--clean ^
+--add-data "xiaochen_agent_v2;xiaochen_agent_v2" ^
+launcher.py
 
 if %errorlevel% neq 0 (
     echo.

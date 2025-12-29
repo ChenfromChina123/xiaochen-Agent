@@ -1,10 +1,17 @@
 import sys
 import os
+import io
 
 """
 小晨终端助手 (XIAOCHEN_TERMINAL) - PyInstaller 启动器
 此脚本作为打包为 EXE 时的入口点。
 """
+
+# 强制设置 Python 的标准输出为 UTF-8，防止 Windows 控制台乱码
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # 确保当前目录在路径中，以便能够导入 xiaochen_agent_v2 包
 current_dir = os.path.dirname(os.path.abspath(__file__))
