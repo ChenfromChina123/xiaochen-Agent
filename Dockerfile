@@ -8,10 +8,8 @@ ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 ENV PIP_TRUSTED_HOST=mirrors.aliyun.com
 
 # Install system dependencies
-# build-essential: for compiling c extensions (like psutil if needed)
 # binutils: for pyinstaller to check binaries
 RUN apt-get update && apt-get install -y \
-    build-essential \
     binutils \
     && rm -rf /var/lib/apt/lists/*
 
