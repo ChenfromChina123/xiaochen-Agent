@@ -10,7 +10,15 @@ DEFAULT_MAX_READ_LINES = 250
 DEFAULT_MAX_READ_CHARS = 20000
 
 
+import sys
+
 def get_repo_root() -> str:
+    """获取项目的根目录。如果是打包后的 EXE，则返回 EXE 所在的目录。"""
+    if getattr(sys, 'frozen', False):
+        # 打包环境：sys.executable 是 EXE 的完整路径
+        return os.path.dirname(os.path.abspath(sys.executable))
+    
+    # 源码环境：基于当前文件的位置推算
     pkg_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     return os.path.abspath(os.path.join(pkg_dir, ".."))
 

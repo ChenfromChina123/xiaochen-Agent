@@ -67,6 +67,7 @@ def test_search_functionality():
 def main():
     """
     主函数，执行所有测试
+    """
     print("\n" + "=" * 50)
     print("测试结果汇总:")
     passed = sum(1 for _, result in results if result)
@@ -78,7 +79,7 @@ def main():
         print(f"  {status} {test_name}")
         ("文件操作测试", test_file_operations),
         ("搜索功能测试", test_search_functionality),
-    ]
+    
 
     results = []
     for test_name, test_func in tests:

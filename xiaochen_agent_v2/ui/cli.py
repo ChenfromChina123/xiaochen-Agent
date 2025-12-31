@@ -2,13 +2,17 @@ import os
 import sys
 import threading
 import time
+from typing import List, Dict
 
 from ..core.agent import VoidAgent
 from ..core.config import Config
 from ..utils.console import Fore, Style
 from ..core.session import SessionManager
 from ..core.config_manager import ConfigManager
+from ..utils.process_tracker import ProcessTracker
 
+
+from ..utils.files import get_repo_root
 
 def run_cli() -> None:
     """
@@ -24,7 +28,7 @@ def run_cli() -> None:
         os.system('chcp 65001 > nul')
 
     # 初始化配置管理器
-    config_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
+    config_file = os.path.join(get_repo_root(), "config.json")
     configManager = ConfigManager(config_file=config_file)
     savedConfig = {}
     
@@ -46,6 +50,50 @@ def run_cli() -> None:
             "verifySsl": False  # 基于测试脚本设置为 False
         }
     }
+
+    def display_history_messages(messages: List[Dict[str, str]]) -> None:
+        """格式化并显示历史消息内容"""
+        if not messages:
+            return
+
+        print(f"\n{Fore.CYAN}{'='*20} 历史消息记录 {'='*20}{Style.RESET_ALL}")
+        for msg in messages:
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            
+            # 处理分行显示的消息内容
+            if isinstance(content, list):
+                content = "\n".join([str(x) for x in content])
+            
+            if role == "system":
+                # 系统消息通常很长，只显示前两行或简略显示
+                lines = str(content).strip().splitlines()
+                display_content = lines[0] + "..." if len(lines) > 1 else lines[0]
+                print(f"{Fore.MAGENTA}[System]{Style.RESET_ALL} {display_content}")
+            elif role == "user":
+                # 尝试从复杂的输入格式中提取纯文本
+                display_text = content
+                if "## 📥 USER INPUT" in content:
+                    try:
+                        display_text = content.split("## 📥 USER INPUT")[-1].strip()
+                    except:
+                        pass
+                print(f"\n{Fore.GREEN}[User]{Style.RESET_ALL} {display_text}")
+            elif role == "assistant":
+                if "tool_calls" in msg:
+                    print(f"{Fore.YELLOW}[Assistant]{Style.RESET_ALL} (调用了工具)")
+                else:
+                    # 简略显示助手回答，避免刷屏
+                    lines = str(content).strip().splitlines()
+                    if len(lines) > 5:
+                        display_content = "\n".join(lines[:5]) + f"\n{Fore.BLACK}{Style.BRIGHT}(... 剩余 {len(lines)-5} 行 ...){Style.RESET_ALL}"
+                    else:
+                        display_content = content
+                    print(f"{Fore.CYAN}[Assistant]{Style.RESET_ALL} {display_content}")
+            elif role == "tool":
+                print(f"{Fore.BLACK}{Style.BRIGHT}[Tool Result]{Style.RESET_ALL} (工具执行结果)")
+        
+        print(f"{Fore.CYAN}{'='*54}{Style.RESET_ALL}\n")
 
     def print_model_status() -> None:
         """
@@ -198,6 +246,7 @@ def run_cli() -> None:
                                 pass
                             print(f"{Fore.GREEN}✓ 已加载会话: {selected_session['filename']}{Style.RESET_ALL}")
                             print(f"{Fore.GREEN}  包含 {len(messages)} 条历史消息{Style.RESET_ALL}")
+                            display_history_messages(messages)
                         else:
                             print(f"{Fore.RED}✗ 加载会话失败{Style.RESET_ALL}")
             except Exception as e:
@@ -333,7 +382,9 @@ def run_cli() -> None:
             # 重置中断标志
             agent.interruptHandler.reset()
             
-            inputOfUser = input(f"\n{Style.BRIGHT}User: ")
+            # 在提示符中显示当前工作目录
+            current_dir = os.getcwd()
+            inputOfUser = input(f"\n{Fore.BLUE}{current_dir}{Style.RESET_ALL}\n{Style.BRIGHT}User: ")
             raw_cmd = inputOfUser.strip()
             if not raw_cmd:
                 continue
@@ -406,6 +457,10 @@ def run_cli() -> None:
                 agent.lastFullMessages = []
                 if hasattr(agent, "_chatMarkers"):
                     agent._chatMarkers = []
+                
+                # 检查并显示活跃的 AI 进程
+                ProcessTracker().print_active_processes()
+                
                 try:
                     autosaveFilename = sessionManager.create_autosave_session()
                     sessionManager.update_session(autosaveFilename, agent.getFullHistory())
@@ -413,6 +468,7 @@ def run_cli() -> None:
                     pass
                 print(f"{Fore.GREEN}✓ 已加载会话: {selected_session['filename']}{Style.RESET_ALL}")
                 print(f"{Fore.GREEN}  包含 {len(messages)} 条历史消息{Style.RESET_ALL}")
+                display_history_messages(messages)
                 continue
 
             if cmd in ["new"]:

@@ -25,7 +25,13 @@ def _find_tag_span(source: str, tag: str) -> Optional[Tuple[int, int]]:
 
 
 def _normalize_block_text(raw: str) -> str:
-    """去除标签缩进带来的公共前导空白，保留相对缩进。"""
+    """
+    处理标签内容：
+    1. 去除首尾的换行符（如果存在）。
+    2. 不再强制去除公共缩进（dedent），以保留 AI 生成的原始缩进。
+       如果 AI 在 XML 中使用了缩进，则该缩进会被保留。
+       这对 auto_indent=False 的场景至关重要。
+    """
     if raw.startswith("\r\n"):
         raw = raw[2:]
     elif raw.startswith("\n"):
@@ -36,7 +42,8 @@ def _normalize_block_text(raw: str) -> str:
     elif raw.endswith("\n"):
         raw = raw[:-1]
 
-    return textwrap.dedent(raw)
+    # 移除 textwrap.dedent 调用，避免误删必要的缩进
+    return raw
 
 
 def find_substring(source: str, sub: str, *, keep_indentation: bool = False) -> str:

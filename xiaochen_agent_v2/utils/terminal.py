@@ -6,6 +6,7 @@ import uuid
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from .console import Fore, Style
+from .process_tracker import ProcessTracker
 
 @dataclass
 class TerminalProcess:
@@ -17,6 +18,7 @@ class TerminalProcess:
     start_time: float = field(default_factory=time.time)
     exit_code: Optional[int] = None
     thread: Optional[threading.Thread] = None
+    proc_uuid: str = ""  # 全局唯一追踪ID
 
 class TerminalManager:
     """
@@ -34,8 +36,13 @@ class TerminalManager:
         :return: (是否成功启动/执行, 终端ID, 输出结果, 错误信息)
         """
         tid = str(uuid.uuid4())[:8]
+        proc_uuid = str(uuid.uuid4())  # 用于进程追踪的唯一ID
         
         try:
+            # 准备环境变量
+            env = os.environ.copy()
+            env["XIAOCHEN_PROC_UUID"] = proc_uuid
+
             # 统一使用 shell 执行，并设置编码为 utf-8 以避免 Windows 上的解码错误
             proc = subprocess.Popen(
                 command,
@@ -47,14 +54,19 @@ class TerminalManager:
                 errors='replace', # 解码失败时替换字符，不抛出异常
                 cwd=cwd or os.getcwd(),
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
+                env=env
             )
+            
+            # 记录到全局追踪器
+            ProcessTracker().add_process(command, proc.pid, proc_uuid, cwd or os.getcwd())
 
             term = TerminalProcess(
                 id=tid,
                 command=command,
                 process=proc,
-                is_long_running=is_long_running
+                is_long_running=is_long_running,
+                proc_uuid=proc_uuid
             )
             self.terminals[tid] = term
 
@@ -75,6 +87,8 @@ class TerminalManager:
                         # 进程在 10 秒内提前结束，说明启动失败或瞬时任务
                         stdout, stderr = proc.communicate()
                         term.exit_code = proc.returncode
+                        ProcessTracker().update_status(proc_uuid, "failed" if proc.returncode != 0 else "completed", proc.returncode)
+                        
                         output = f"Stdout:\n{stdout}\nStderr:\n{stderr}"
                         del self.terminals[tid]
                         return False, tid, output, f"Process exited early with code {proc.returncode}"
@@ -88,6 +102,8 @@ class TerminalManager:
                 try:
                     stdout, stderr = proc.communicate(timeout=120)
                     term.exit_code = proc.returncode
+                    ProcessTracker().update_status(proc_uuid, "completed" if proc.returncode == 0 else "failed", proc.returncode)
+                    
                     output = f"Stdout:\n{stdout}\nStderr:\n{stderr}"
                     del self.terminals[tid]
                     if proc.returncode == 0:
@@ -134,6 +150,11 @@ class TerminalManager:
 
             term.process.wait()
             term.exit_code = term.process.returncode
+            
+            # 进程结束，更新追踪状态
+            status = "completed" if term.exit_code == 0 else "failed"
+            ProcessTracker().update_status(term.proc_uuid, status, term.exit_code)
+            
             for t in threads:
                 t.join(timeout=0.2)
         except Exception:
