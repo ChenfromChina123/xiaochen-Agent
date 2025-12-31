@@ -14,18 +14,17 @@ from ..utils.process_tracker import ProcessTracker
 
 from ..utils.files import get_repo_root
 
+# 确保 Windows 控制台编码为 UTF-8
+import sys
+if sys.platform == "win32":
+    import io
+    sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    os.system('chcp 65001 > nul')
+
 def run_cli() -> None:
     """
     启动 Void Agent 的命令行交互界面。
-    负责初始化配置、设置控制台环境以及处理用户循环输入。
-    """
-    # 确保 Windows 控制台编码为 UTF-8
-    import sys
-    if sys.platform == "win32":
-        import io
-        sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-        os.system('chcp 65001 > nul')
 
     # 初始化配置管理器
     config_file = os.path.join(get_repo_root(), "config.json")
