@@ -618,6 +618,18 @@ class Agent:
 {inputOfUser}
 """
 
+    def getContextOfCurrentUserMinimal(self, inputOfUser: str) -> str:
+        cwd = os.getcwd()
+        task_str = ""
+        if self.taskManager._tasks:
+            task_str = f"\n\n## 📋 CURRENT TASKS\n{self.taskManager.render()}"
+
+        return f"""Current Directory: {cwd}{task_str}
+
+## 📥 USER INPUT
+{inputOfUser}
+"""
+
     def getSystemMessage(self) -> Dict[str, str]:
         if self.cacheOfSystemMessage is None:
             self.cacheOfSystemMessage = {"role": "system", "content": self.getContextOfSystem()}
@@ -715,7 +727,14 @@ class Agent:
 
     def getFullHistory(self) -> List[Dict[str, str]]:
         """返回包含系统提示词的完整历史记录。"""
-        return [self.getSystemMessage()] + self.historyOfMessages
+        if (
+            isinstance(self.historyOfMessages, list)
+            and self.historyOfMessages
+            and isinstance(self.historyOfMessages[0], dict)
+            and self.historyOfMessages[0].get("role") == "system"
+        ):
+            return list(self.historyOfMessages)
+        return [self.getSystemMessage()] + list(self.historyOfMessages)
 
     def generateSessionTitle(self, firstUserInput: str) -> str:
         """
@@ -790,12 +809,25 @@ class Agent:
             print(f"{Fore.YELLOW}Empty input and no history. Waiting for command...{Style.RESET_ALL}")
             return
 
-        msgSystem = self.getSystemMessage()
+        loaded_system = None
+        if (
+            isinstance(self.historyOfMessages, list)
+            and self.historyOfMessages
+            and isinstance(self.historyOfMessages[0], dict)
+            and self.historyOfMessages[0].get("role") == "system"
+        ):
+            loaded_system = self.historyOfMessages[0]
+
+        msgSystem = loaded_system or self.getSystemMessage()
         baseHistoryLen = len(self.historyOfMessages)
-        historyWorking: List[Dict[str, str]] = list(self.historyOfMessages)
+        historyWorking: List[Dict[str, str]] = list(self.historyOfMessages[1:] if loaded_system else self.historyOfMessages)
         insertedUserContext = False
         if inputOfUser:
-            historyWorking.append({"role": "user", "content": self.getContextOfCurrentUser(inputOfUser)})
+            if baseHistoryLen <= 0:
+                content = self.getContextOfCurrentUser(inputOfUser)
+            else:
+                content = self.getContextOfCurrentUserMinimal(inputOfUser)
+            historyWorking.append({"role": "user", "content": content})
             insertedUserContext = True
 
         countCycle = 0
@@ -818,7 +850,6 @@ class Agent:
                     messages = [msgSystem] + head + tail
                     estimateTokens = self.estimateTokensOfMessages(messages)
                 
-                # 本地计算缓存命中估算 (备用方案)
                 localHitEstimate = 0
                 if self.lastFullMessages:
                     commonPrefix = []
@@ -829,8 +860,7 @@ class Agent:
                             break
                     if commonPrefix:
                         localHitEstimate = self.estimateTokensOfMessages(commonPrefix)
-                
-                # 更新本次请求的完整消息，供下次对比
+
                 self.lastFullMessages = list(messages)
                 
                 print(f"{Fore.MAGENTA}[Token Estimate] ~{estimateTokens} tokens{Style.RESET_ALL}")
@@ -916,28 +946,27 @@ class Agent:
                 finally:
                     print("\n" + "-" * 40)
                     if usageOfRequest:
-                        # 从单次请求中提取命中和未命中
-                        hit = int(usageOfRequest.get("prompt_cache_hit_tokens") or 0)
-                        if hit == 0:
+                        prompt = int(usageOfRequest.get("prompt_tokens") or 0)
+                        hit = 0
+                        hit_source = "vendor"
+                        if "prompt_cache_hit_tokens" in usageOfRequest:
+                            hit = int(usageOfRequest.get("prompt_cache_hit_tokens") or 0)
+                        else:
                             details = usageOfRequest.get("prompt_tokens_details")
-                            if isinstance(details, dict):
+                            if isinstance(details, dict) and "cached_tokens" in details:
                                 hit = int(details.get("cached_tokens") or 0)
-                        
-                        # 备用方案：如果 API 返回 0 但本地计算有重复前缀，则使用本地估算值
-                        isEstimated = False
-                        if hit == 0 and localHitEstimate > 0:
-                            hit = localHitEstimate
-                            isEstimated = True
-                            # 更新 usage 对象以便后续统计使用
-                            if "prompt_tokens_details" not in usageOfRequest:
-                                usageOfRequest["prompt_tokens_details"] = {}
-                            usageOfRequest["prompt_tokens_details"]["cached_tokens"] = hit
-                            # 如果是 DeepSeek 风格也可以设置
-                            usageOfRequest["prompt_cache_hit_tokens"] = hit
+                            else:
+                                hit_source = "local"
+                                if localHitEstimate > 0 and prompt > 0:
+                                    hit = min(int(localHitEstimate), prompt)
+                                usageOfRequest["prompt_cache_hit_tokens"] = hit
+                                if "prompt_tokens_details" not in usageOfRequest:
+                                    usageOfRequest["prompt_tokens_details"] = {}
+                                if isinstance(usageOfRequest["prompt_tokens_details"], dict):
+                                    usageOfRequest["prompt_tokens_details"]["cached_tokens"] = hit
 
                         self.statsOfCache.updateFromUsage(usageOfRequest)
-                        
-                        prompt = int(usageOfRequest.get("prompt_tokens") or 0)
+
                         miss = int(usageOfRequest.get("prompt_cache_miss_tokens") or 0)
                         if miss == 0 and prompt > hit:
                             miss = prompt - hit
@@ -945,8 +974,8 @@ class Agent:
                         rateReq = CacheStats.getHitRateOfUsage(usageOfRequest)
                         rateSession = self.statsOfCache.getSessionHitRate()
                         rateReqStr = f"{rateReq*100:.1f}%" if rateReq is not None else "N/A"
-                        if isEstimated:
-                            rateReqStr += " (Est.)"
+                        if hit_source == "local":
+                            rateReqStr += " (Local)"
                         
                         rateSessionStr = f"{rateSession*100:.1f}%" if rateSession is not None else "N/A"
                         print(
@@ -1558,7 +1587,7 @@ class Agent:
         if countCycle >= self.config.maxCycles:
             print(f"{Fore.RED}[Tip] Max cycles reached.{Style.RESET_ALL}")
 
-        self.historyOfMessages = historyWorking
+        self.historyOfMessages = [msgSystem] + list(historyWorking)
         self.maybePrintModificationStats()
         self._chatMarkers.append(chat_marker)
 

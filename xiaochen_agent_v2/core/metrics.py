@@ -51,6 +51,29 @@ class CacheStats:
             return None
         return self.promptCacheHitTokens / denom
 
+    def to_dict(self) -> Dict[str, int]:
+        return {
+            "promptCacheHitTokens": self.promptCacheHitTokens,
+            "promptCacheMissTokens": self.promptCacheMissTokens,
+            "promptTokens": self.promptTokens,
+            "completionTokens": self.completionTokens,
+            "totalTokens": self.totalTokens,
+            "countedRequests": self.countedRequests,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CacheStats":
+        if not data:
+            return cls()
+        return cls(
+            promptCacheHitTokens=int(data.get("promptCacheHitTokens", 0)),
+            promptCacheMissTokens=int(data.get("promptCacheMissTokens", 0)),
+            promptTokens=int(data.get("promptTokens", 0)),
+            completionTokens=int(data.get("completionTokens", 0)),
+            totalTokens=int(data.get("totalTokens", 0)),
+            countedRequests=int(data.get("countedRequests", 0)),
+        )
+
     @staticmethod
     def getHitRateOfUsage(usage: Dict[str, Any]) -> Optional[float]:
         """返回单次请求命中率（hit/prompt_tokens），无数据时返回 None。"""

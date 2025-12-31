@@ -5,7 +5,7 @@
 import os
 import json
 import time
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 from datetime import datetime
 
 from ..utils.files import cleanup_directory, get_sessions_dir
@@ -14,7 +14,13 @@ from ..utils.files import cleanup_directory, get_sessions_dir
 class SessionManager:
     """会话管理器，负责会话历史的持久化存储"""
     
-    def __init__(self, sessions_dir: Optional[str] = None):
+    def __init__(
+        self,
+        sessions_dir: Optional[str] = None,
+        *,
+        max_files: int = 50,
+        max_age_days: Optional[int] = None,
+    ):
         """
         初始化会话管理器
         
@@ -22,7 +28,56 @@ class SessionManager:
             sessions_dir: 会话存储目录路径
         """
         self.sessions_dir = sessions_dir or get_sessions_dir()
+        self.max_files = int(max_files) if int(max_files) > 0 else 50
+        self.max_age_days = int(max_age_days) if max_age_days is not None and str(max_age_days).strip().isdigit() else None
         os.makedirs(self.sessions_dir, exist_ok=True)
+
+    def prune_sessions(self, *, max_files: Optional[int] = None, max_age_days: Optional[int] = None) -> Dict[str, int]:
+        errors = 0
+
+        if not os.path.exists(self.sessions_dir):
+            return {"deleted": 0, "kept": 0, "errors": 0}
+
+        try:
+            before_count = len([f for f in os.listdir(self.sessions_dir) if f.endswith(".json")])
+        except Exception:
+            before_count = 0
+
+        eff_max_files = self.max_files if max_files is None else int(max_files)
+        if eff_max_files <= 0:
+            eff_max_files = self.max_files
+        eff_max_age_days = self.max_age_days if max_age_days is None else int(max_age_days)
+        if eff_max_age_days is not None and eff_max_age_days <= 0:
+            eff_max_age_days = None
+
+        if eff_max_age_days is not None:
+            cutoff_ts = time.time() - (eff_max_age_days * 86400)
+            for filename in list(os.listdir(self.sessions_dir)):
+                if not filename.endswith(".json"):
+                    continue
+                filepath = os.path.join(self.sessions_dir, filename)
+                try:
+                    st = os.stat(filepath)
+                    if st.st_mtime < cutoff_ts:
+                        os.remove(filepath)
+                except Exception:
+                    errors += 1
+
+        try:
+            cleanup_directory(self.sessions_dir, max_files=eff_max_files, pattern="*.json")
+        except Exception:
+            errors += 1
+
+        try:
+            kept = len([f for f in os.listdir(self.sessions_dir) if f.endswith(".json")])
+        except Exception:
+            kept = 0
+
+        deleted = 0
+        if before_count >= kept:
+            deleted = before_count - kept
+
+        return {"deleted": deleted, "kept": kept, "errors": errors}
 
     def create_autosave_session(self, session_name: Optional[str] = None) -> str:
         """
@@ -51,6 +106,7 @@ class SessionManager:
             "autosave": True,
             "title": "",
             "first_user_input": "",
+            "cache_stats": None,
         }
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(session_data, f, ensure_ascii=False, indent=2)
@@ -76,13 +132,14 @@ class SessionManager:
             parsed.append(msg_copy)
         return parsed
 
-    def update_session(self, filename: str, messages: List[Dict[str, str]]) -> bool:
+    def update_session(self, filename: str, messages: List[Dict[str, str]], cache_stats: Optional[Dict[str, int]] = None) -> bool:
         """
         更新指定会话文件内容。
 
         Args:
             filename: 会话文件名
             messages: 完整消息列表（建议包含 system）
+            cache_stats: 缓存统计数据
 
         Returns:
             是否写入成功
@@ -92,14 +149,15 @@ class SessionManager:
 
         filepath = os.path.join(self.sessions_dir, filename)
         
-        # 定期清理历史会话，保留最近 50 个
-        cleanup_directory(self.sessions_dir, max_files=50, pattern="*.json")
+        self.prune_sessions()
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         created_at = datetime.now().isoformat()
         autosave = False
         title = ""
         first_user_input = ""
+        current_stats = None
+        
         if os.path.exists(filepath):
             try:
                 with open(filepath, "r", encoding="utf-8") as f:
@@ -110,6 +168,7 @@ class SessionManager:
                     autosave = bool(data.get("autosave", False))
                     title = str(data.get("title") or "").strip()
                     first_user_input = str(data.get("first_user_input") or "").strip()
+                    current_stats = data.get("cache_stats")
             except Exception:
                 pass
 
@@ -129,6 +188,7 @@ class SessionManager:
             "messages": formatted_messages,
             "title": title,
             "first_user_input": first_user_input,
+            "cache_stats": cache_stats if cache_stats is not None else current_stats,
         }
         if autosave:
             session_data["autosave"] = True
@@ -217,13 +277,14 @@ class SessionManager:
         line = text.splitlines()[0].strip()
         return (line[:24] + "…") if len(line) > 24 else line
     
-    def save_session(self, messages: List[Dict[str, str]], session_name: Optional[str] = None) -> str:
+    def save_session(self, messages: List[Dict[str, str]], session_name: Optional[str] = None, cache_stats: Optional[Dict[str, int]] = None) -> str:
         """
         保存当前会话到文件
         
         Args:
             messages: 消息历史列表
             session_name: 可选的会话名称，如果不提供则使用时间戳
+            cache_stats: 缓存统计数据
             
         Returns:
             保存的会话文件名
@@ -251,6 +312,7 @@ class SessionManager:
             "messages": formatted_messages,
             "title": (session_name or "").strip(),
             "first_user_input": self._guess_first_user_input_from_messages(formatted_messages),
+            "cache_stats": cache_stats,
         }
         
         with open(filepath, "w", encoding="utf-8") as f:
@@ -316,7 +378,7 @@ class SessionManager:
         except Exception:
             return "未命名会话"
     
-    def load_session(self, filename: str) -> Optional[List[Dict[str, str]]]:
+    def load_session(self, filename: str) -> Tuple[Optional[List[Dict[str, str]]], Optional[Dict[str, int]]]:
         """
         加载指定的会话
         
@@ -324,21 +386,22 @@ class SessionManager:
             filename: 会话文件名
             
         Returns:
-            消息历史列表，如果加载失败则返回None
+            (消息历史列表, 缓存统计数据)
         """
         filepath = os.path.join(self.sessions_dir, filename)
         
         if not os.path.exists(filepath):
-            return None
+            return None, None
         
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
             messages = data.get("messages", [])
-            return self._parse_messages(messages)
+            cache_stats = data.get("cache_stats")
+            return self._parse_messages(messages), cache_stats
         except Exception:
-            return None
+            return None, None
     
     def delete_session(self, filename: str) -> bool:
         """
@@ -360,3 +423,19 @@ class SessionManager:
             return True
         except Exception:
             return False
+
+    def delete_sessions(self, filenames: List[str]) -> Dict[str, int]:
+        deleted = 0
+        missing = 0
+        errors = 0
+        for fn in filenames or []:
+            fp = os.path.join(self.sessions_dir, str(fn))
+            if not os.path.exists(fp):
+                missing += 1
+                continue
+            try:
+                os.remove(fp)
+                deleted += 1
+            except Exception:
+                errors += 1
+        return {"deleted": deleted, "missing": missing, "errors": errors}

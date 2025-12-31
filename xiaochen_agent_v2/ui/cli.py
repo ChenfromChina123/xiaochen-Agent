@@ -6,6 +6,7 @@ from typing import List, Dict
 
 from ..core.agent import VoidAgent
 from ..core.config import Config
+from ..core.metrics import CacheStats
 from ..utils.console import Fore, Style
 from ..core.session import SessionManager
 from ..core.config_manager import ConfigManager
@@ -94,6 +95,19 @@ def run_cli() -> None:
                 print(f"{Fore.BLACK}{Style.BRIGHT}[Tool Result]{Style.RESET_ALL} (工具执行结果)")
         
         print(f"{Fore.CYAN}{'='*54}{Style.RESET_ALL}\n")
+
+    def _infer_last_prompt_messages(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        if not messages:
+            return []
+        last_user_idx = -1
+        for i in range(len(messages) - 1, -1, -1):
+            m = messages[i]
+            if isinstance(m, dict) and m.get("role") == "user":
+                last_user_idx = i
+                break
+        if last_user_idx < 0:
+            return list(messages)
+        return list(messages[: last_user_idx + 1])
 
     def print_model_status() -> None:
         """
@@ -201,14 +215,10 @@ def run_cli() -> None:
     agent.readIndentMode = str(readIndentMode or "smart")
     agent.pythonValidateRuff = str(pythonValidateRuff or "auto")
     sessionManager = SessionManager()
-    autosaveFilename = ""
+    autosaveFilename = None
     autosaveTitle = ""
     firstUserInput = ""
     titleLock = threading.Lock()
-    try:
-        autosaveFilename = sessionManager.create_autosave_session()
-    except Exception:
-        autosaveFilename = ""
     
     # 询问是否加载历史会话
     print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
@@ -231,19 +241,31 @@ def run_cli() -> None:
                     idx = int(choice_idx) - 1
                     if 0 <= idx < len(sessions):
                         selected_session = sessions[idx]
-                        messages = sessionManager.load_session(selected_session['filename'])
+                        messages, stats = sessionManager.load_session(selected_session['filename'])
                         if messages:
-                            # 如果第一条消息是系统消息，则剔除它，因为 Agent 会自动生成
-                            if messages and messages[0].get("role") == "system":
-                                agent.historyOfMessages = messages[1:]
+                            # 加载会话历史（保持原样，不剔除 System Message，确保一致性）
+                            agent.historyOfMessages = messages
+                            if (
+                                isinstance(messages, list)
+                                and messages
+                                and isinstance(messages[0], dict)
+                                and messages[0].get("role") == "system"
+                            ):
+                                agent.cacheOfSystemMessage = messages[0]
+                            # 恢复缓存统计
+                            if stats:
+                                agent.statsOfCache = CacheStats.from_dict(stats)
                             else:
-                                agent.historyOfMessages = messages
+                                agent.statsOfCache = CacheStats()
+
+                            agent.lastFullMessages = _infer_last_prompt_messages(messages)
                             
-                            try:
-                                if autosaveFilename:
-                                    sessionManager.update_session(autosaveFilename, agent.getFullHistory())
-                            except Exception:
-                                pass
+                            # 延续当前会话文件
+                            autosaveFilename = selected_session['filename']
+                            autosaveTitle = selected_session.get("title", "")
+                            # 尝试重置 firstUserInput，避免标题生成逻辑混淆
+                            firstUserInput = "" 
+
                             print(f"{Fore.GREEN}✓ 已加载会话: {selected_session['filename']}{Style.RESET_ALL}")
                             print(f"{Fore.GREEN}  包含 {len(messages)} 条历史消息{Style.RESET_ALL}")
                             display_history_messages(messages)
@@ -315,6 +337,9 @@ def run_cli() -> None:
         print(f"{Fore.CYAN}sessions -help{Style.RESET_ALL}")
         print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
         print("sessions              查看最近 10 个历史会话")
+        print("sessions delete <n...|filename...> [-y]     删除会话（支持批量）")
+        print("sessions delete --all [-y]                  删除所有会话")
+        print("sessions prune [--max-files N] [--max-age-days D] [-y]  清理会话")
         print("load [n]              加载第 n 个历史会话（不退出）")
         print("new                   新建空会话并继续对话")
         print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
@@ -346,12 +371,18 @@ def run_cli() -> None:
         """
         将最新历史立即写入 autosave，会被 Agent 在每次模型输出后调用。
         """
+        nonlocal autosaveFilename
+        # 懒加载：只有在真正有内容要保存时才创建文件
         if not autosaveFilename:
-            return
+            try:
+                autosaveFilename = sessionManager.create_autosave_session()
+            except Exception:
+                return
+
         with titleLock:
             title = autosaveTitle
             first = firstUserInput
-        sessionManager.update_session(autosaveFilename, messages)
+        sessionManager.update_session(autosaveFilename, messages, cache_stats=agent.statsOfCache.to_dict())
         if title or first:
             sessionManager.update_session_meta(autosaveFilename, title=title or None, first_user_input=first or None)
 
@@ -402,7 +433,7 @@ def run_cli() -> None:
                 agent.rollbackLastOperation()
                 try:
                     if autosaveFilename:
-                        sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                        sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
                 except Exception:
                     pass
                 continue
@@ -411,7 +442,7 @@ def run_cli() -> None:
                 agent.rollbackLastChat()
                 try:
                     if autosaveFilename:
-                        sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                        sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
                 except Exception:
                     pass
                 continue
@@ -420,6 +451,177 @@ def run_cli() -> None:
                 if args and args[0].lower() in {"-help", "help", "?"}:
                     print_help_sessions()
                     continue
+                if args and args[0].lower() in {"delete", "del", "rm"}:
+                    # 处理 --all, -all 或 all
+                    is_all = any(a.lower() in {"--all", "-all", "all"} for a in args[1:])
+                    yes = any(a.lower() in {"-y", "--yes"} for a in args[1:])
+
+                    if is_all:
+                        all_sessions = sessionManager.list_sessions(limit=1000)
+                        if not all_sessions:
+                            print(f"{Fore.YELLOW}没有找到任何会话{Style.RESET_ALL}")
+                            continue
+                        
+                        if not yes:
+                            print(f"{Fore.RED}{Style.BRIGHT}警告: 即将删除所有会话 ({len(all_sessions)} 个)！{Style.RESET_ALL}")
+                            confirm = input("确认清空所有会话? (y/N): ").strip().lower()
+                            if confirm != "y":
+                                print(f"{Fore.YELLOW}已取消操作{Style.RESET_ALL}")
+                                continue
+                        
+                        filenames = [s["filename"] for s in all_sessions]
+                        result = sessionManager.delete_sessions(filenames)
+                        print(f"{Fore.GREEN}✓ 已清空所有会话{Style.RESET_ALL} (deleted={result.get('deleted', 0)})")
+                        
+                        # 重置当前会话状态
+                        autosaveFilename = None
+                        autosaveTitle = ""
+                        firstUserInput = ""
+                        continue
+
+                    sessions = sessionManager.list_sessions(limit=10)
+                    if not sessions:
+                        print(f"{Fore.YELLOW}没有找到历史会话{Style.RESET_ALL}")
+                        continue
+
+                    yes = any(a.lower() in {"-y", "--yes"} for a in args[1:])
+                    raw_targets = [a for a in args[1:] if a.lower() not in {"-y", "--yes"}]
+                    if not raw_targets:
+                        entered = input("输入要删除的会话编号或文件名（支持多个，以空格/逗号分隔）: ").strip()
+                        raw_targets = [t for t in entered.replace(",", " ").split() if t]
+
+                    targets: List[str] = []
+                    bad: List[str] = []
+                    for tok in raw_targets:
+                        t = str(tok).strip()
+                        if not t:
+                            continue
+                        if t.isdigit():
+                            idx = int(t) - 1
+                            if 0 <= idx < len(sessions):
+                                targets.append(sessions[idx]["filename"])
+                            else:
+                                bad.append(t)
+                        else:
+                            targets.append(t)
+
+                    deduped: List[str] = []
+                    seen = set()
+                    for fn in targets:
+                        key = str(fn).lower()
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        deduped.append(fn)
+
+                    if bad:
+                        print(f"{Fore.RED}✗ 会话编号超出范围: {', '.join(bad)}{Style.RESET_ALL}")
+                        continue
+                    if not deduped:
+                        print(f"{Fore.RED}✗ 未提供要删除的会话{Style.RESET_ALL}")
+                        continue
+
+                    if not yes:
+                        print(f"\n{Fore.YELLOW}即将删除 {len(deduped)} 个会话:{Style.RESET_ALL}")
+                        for fn in deduped:
+                            print(f"  - {fn}")
+                        confirm = input("确认删除? (y/N): ").strip().lower()
+                        if confirm != "y":
+                            print(f"{Fore.YELLOW}已取消删除{Style.RESET_ALL}")
+                            continue
+
+                    result = sessionManager.delete_sessions(deduped)
+                    print(
+                        f"{Fore.GREEN}✓ 删除完成{Style.RESET_ALL} "
+                        f"(deleted={result.get('deleted', 0)}, missing={result.get('missing', 0)}, errors={result.get('errors', 0)})"
+                    )
+
+                    if autosaveFilename:
+                        try:
+                            fp = os.path.join(sessionManager.sessions_dir, autosaveFilename)
+                            if not os.path.exists(fp):
+                                autosaveFilename = None
+                                autosaveTitle = ""
+                                firstUserInput = ""
+                        except Exception:
+                            pass
+
+                    continue
+
+                if args and args[0].lower() in {"prune", "clean"}:
+                    yes = any(a.lower() in {"-y", "--yes"} for a in args[1:])
+                    max_files = None
+                    max_age_days = None
+                    sub_args = args[1:]
+
+                    parse_error = False
+                    i = 0
+                    while i < len(sub_args):
+                        t = str(sub_args[i]).strip()
+                        low = t.lower()
+                        if low in {"-y", "--yes"}:
+                            i += 1
+                            continue
+                        if low in {"--max-files", "--max_file", "--keep"}:
+                            if i + 1 >= len(sub_args):
+                                parse_error = True
+                                break
+                            v = str(sub_args[i + 1]).strip()
+                            if not v.isdigit():
+                                parse_error = True
+                                break
+                            max_files = int(v)
+                            i += 2
+                            continue
+                        if low in {"--max-age-days", "--max_age_days", "--age-days"}:
+                            if i + 1 >= len(sub_args):
+                                parse_error = True
+                                break
+                            v = str(sub_args[i + 1]).strip()
+                            if not v.isdigit():
+                                parse_error = True
+                                break
+                            max_age_days = int(v)
+                            i += 2
+                            continue
+                        if low.isdigit() and max_files is None:
+                            max_files = int(low)
+                            i += 1
+                            continue
+                        parse_error = True
+                        break
+
+                    if parse_error:
+                        print(f"{Fore.RED}✗ 用法: sessions prune [--max-files N] [--max-age-days D] [-y]{Style.RESET_ALL}")
+                        continue
+
+                    eff_max_files = sessionManager.max_files if max_files is None else int(max_files)
+                    eff_max_age_days = sessionManager.max_age_days if max_age_days is None else int(max_age_days)
+                    if not yes:
+                        print(f"{Fore.YELLOW}将清理会话: max_files={eff_max_files}, max_age_days={eff_max_age_days}{Style.RESET_ALL}")
+                        confirm = input("确认清理? (y/N): ").strip().lower()
+                        if confirm != "y":
+                            print(f"{Fore.YELLOW}已取消清理{Style.RESET_ALL}")
+                            continue
+
+                    result = sessionManager.prune_sessions(max_files=max_files, max_age_days=max_age_days)
+                    print(
+                        f"{Fore.GREEN}✓ 清理完成{Style.RESET_ALL} "
+                        f"(deleted={result.get('deleted', 0)}, kept={result.get('kept', 0)}, errors={result.get('errors', 0)})"
+                    )
+
+                    if autosaveFilename:
+                        try:
+                            fp = os.path.join(sessionManager.sessions_dir, autosaveFilename)
+                            if not os.path.exists(fp):
+                                autosaveFilename = None
+                                autosaveTitle = ""
+                                firstUserInput = ""
+                        except Exception:
+                            pass
+
+                    continue
+
                 sessions = sessionManager.list_sessions(limit=10)
                 if not sessions:
                     print(f"{Fore.YELLOW}没有找到历史会话{Style.RESET_ALL}")
@@ -445,27 +647,39 @@ def run_cli() -> None:
                     print(f"{Fore.RED}✗ 会话编号超出范围{Style.RESET_ALL}")
                     continue
                 selected_session = sessions[idx]
-                messages = sessionManager.load_session(selected_session["filename"])
+                messages, stats = sessionManager.load_session(selected_session["filename"])
                 if not messages:
                     print(f"{Fore.RED}✗ 加载会话失败{Style.RESET_ALL}")
                     continue
-                if messages and messages[0].get("role") == "system":
-                    agent.historyOfMessages = messages[1:]
+                
+                # 保持原样加载，不剔除 System Message
+                agent.historyOfMessages = messages
+                if (
+                    isinstance(messages, list)
+                    and messages
+                    and isinstance(messages[0], dict)
+                    and messages[0].get("role") == "system"
+                ):
+                    agent.cacheOfSystemMessage = messages[0]
+                # 恢复缓存统计
+                if stats:
+                    agent.statsOfCache = CacheStats.from_dict(stats)
                 else:
-                    agent.historyOfMessages = messages
+                    agent.statsOfCache = CacheStats()
+                
                 agent.historyOfOperations = []
-                agent.lastFullMessages = []
+                agent.lastFullMessages = _infer_last_prompt_messages(messages)
                 if hasattr(agent, "_chatMarkers"):
                     agent._chatMarkers = []
+                
+                # 切换到加载的会话文件
+                autosaveFilename = selected_session['filename']
+                autosaveTitle = selected_session.get("title", "")
+                firstUserInput = ""
                 
                 # 检查并显示活跃的 AI 进程
                 ProcessTracker().print_active_processes()
                 
-                try:
-                    autosaveFilename = sessionManager.create_autosave_session()
-                    sessionManager.update_session(autosaveFilename, agent.getFullHistory())
-                except Exception:
-                    pass
                 print(f"{Fore.GREEN}✓ 已加载会话: {selected_session['filename']}{Style.RESET_ALL}")
                 print(f"{Fore.GREEN}  包含 {len(messages)} 条历史消息{Style.RESET_ALL}")
                 display_history_messages(messages)
@@ -477,11 +691,14 @@ def run_cli() -> None:
                 agent.lastFullMessages = []
                 if hasattr(agent, "_chatMarkers"):
                     agent._chatMarkers = []
-                try:
-                    autosaveFilename = sessionManager.create_autosave_session()
-                    sessionManager.update_session(autosaveFilename, agent.getFullHistory())
-                except Exception:
-                    pass
+                agent.invalidateSystemMessageCache()
+                
+                # 重置会话文件（懒加载，下次保存时创建新文件）
+                autosaveFilename = None
+                autosaveTitle = ""
+                firstUserInput = ""
+                agent.statsOfCache = CacheStats() # 重置统计
+                
                 print(f"{Fore.GREEN}✓ 已新建会话{Style.RESET_ALL}")
                 continue
 
@@ -619,7 +836,7 @@ def run_cli() -> None:
                 if agent.historyOfMessages:
                     try:
                         if autosaveFilename:
-                            sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                            sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
                             print(f"{Fore.GREEN}✓ 会话已自动保存: {autosaveFilename}{Style.RESET_ALL}")
                     except Exception:
                         pass
@@ -628,7 +845,7 @@ def run_cli() -> None:
             if cmd == "save":
                 if agent.historyOfMessages:
                     session_name = input(f"{Fore.CYAN}输入会话名称 (可选，按回车跳过): {Style.RESET_ALL}").strip()
-                    filename = sessionManager.save_session(agent.getFullHistory(), session_name or None)
+                    filename = sessionManager.save_session(agent.getFullHistory(), session_name or None, cache_stats=agent.statsOfCache.to_dict())
                     if filename:
                         print(f"{Fore.GREEN}✓ 会话已保存: {filename}{Style.RESET_ALL}")
                 else:
@@ -639,11 +856,12 @@ def run_cli() -> None:
                 confirm = input(f"{Fore.YELLOW}确认清空会话历史? (y/n): {Style.RESET_ALL}").strip().lower()
                 if confirm == "y":
                     agent.historyOfMessages = []
-                    try:
-                        if autosaveFilename:
-                            sessionManager.update_session(autosaveFilename, agent.getFullHistory())
-                    except Exception:
-                        pass
+                    agent.invalidateSystemMessageCache()
+                    # 清空后视为新会话（懒加载）
+                    autosaveFilename = None
+                    autosaveTitle = ""
+                    firstUserInput = ""
+                    agent.statsOfCache = CacheStats() # 重置统计
                     print(f"{Fore.GREEN}✓ 会话历史已清空{Style.RESET_ALL}")
                 continue
             
@@ -661,7 +879,7 @@ def run_cli() -> None:
             agent.chat(inputOfUser, on_history_updated=persist_history)
             try:
                 if autosaveFilename:
-                    sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                    sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
             except Exception:
                 pass
             
@@ -671,7 +889,7 @@ def run_cli() -> None:
             if now - last_ctrl_c_time < 1.5:
                 try:
                     if autosaveFilename:
-                        sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                        sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
                         print(f"\n{Fore.GREEN}✓ 会话已自动保存: {autosaveFilename}{Style.RESET_ALL}")
                 except Exception:
                     pass
@@ -680,7 +898,7 @@ def run_cli() -> None:
             last_ctrl_c_time = now
             try:
                 if autosaveFilename:
-                    sessionManager.update_session(autosaveFilename, agent.getFullHistory())
+                    sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
                     print(f"\n{Fore.GREEN}✓ 会话已自动保存: {autosaveFilename}{Style.RESET_ALL}")
             except Exception:
                 pass
