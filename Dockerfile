@@ -1,15 +1,10 @@
 FROM python:3.12-slim
 
-# Use Aliyun mirror for apt to speed up build in China
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
-
-# Use Aliyun mirror for pip
-ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
-ENV PIP_TRUSTED_HOST=mirrors.aliyun.com
-
 # Install system dependencies
+# build-essential: for compiling c extensions (like psutil if needed)
 # binutils: for pyinstaller to check binaries
 RUN apt-get update && apt-get install -y \
+    build-essential \
     binutils \
     && rm -rf /var/lib/apt/lists/*
 
