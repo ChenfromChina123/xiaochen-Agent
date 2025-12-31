@@ -45,6 +45,8 @@ pyinstaller --onefile --name "xiaochen_terminal" --clean $ICON_PARAM \
 
 if [ $? -ne 0 ]; then
     echo "[ERROR] Build failed."
+    echo "Tip: If you see 'Python was built without a shared library', please try using the Docker build method:"
+    echo "     ./build_linux_docker.sh"
     exit 1
 fi
 

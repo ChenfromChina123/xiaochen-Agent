@@ -28,6 +28,8 @@
 ## 关键文件说明
 - `run.bat`: Windows 下的一键启动器。它会自动创建 Python 虚拟环境、安装依赖并启动智能体，无需手动干预。
 - `build_exe.bat`: Windows 下的打包脚本。运行后会在 `dist/` 目录下生成 `xiaochen_agent.exe`，该文件可以分发给没有安装 Python 的用户直接运行。
+- `build_linux.sh`: Linux/macOS 下的构建脚本。运行后会在 `dist/` 目录下生成 `xiaochen_terminal` 可执行文件。
+- `build_linux_docker.sh`: 基于 Docker 的 Linux 构建脚本。当本地 Python 环境不满足要求（如缺少共享库）时，使用此脚本可确保构建成功。
 - `cpp_projects/`: C++示例项目，包含基本的C++编程示例和构建配置
 - `python_snake_game/snake_game.py`: Python版贪吃蛇游戏主程序
 - `snake_game/index.html`: 网页版贪吃蛇游戏主文件
