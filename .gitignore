@@ -18,6 +18,7 @@ logs/
 *.pdb
 *.ilk
 *.lib
+*.trae
 
 .DS_Store
 Thumbs.db

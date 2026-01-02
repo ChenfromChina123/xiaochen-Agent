@@ -28,6 +28,206 @@ def run_cli() -> None:
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
         os.system('chcp 65001 > nul')
 
+    line_history: List[str] = []
+
+    def _read_user_line(prompt: str) -> str:
+        """
+        读取一行用户输入，尽量支持方向键与历史回溯；失败则回退到内置 input()。
+        """
+        try:
+            if not sys.stdin.isatty():
+                return input(prompt)
+        except Exception:
+            return input(prompt)
+
+        def _append_history(line: str) -> None:
+            s = (line or "").strip()
+            if not s:
+                return
+            if line_history and line_history[-1] == s:
+                return
+            line_history.append(s)
+
+        def _redraw(prompt_text: str, buf: List[str], cursor: int, last_len: int) -> int:
+            text = "".join(buf)
+            sys.stdout.write("\r")
+            sys.stdout.write(prompt_text)
+            sys.stdout.write(text)
+            tail = last_len - len(text)
+            if tail > 0:
+                sys.stdout.write(" " * tail)
+            sys.stdout.write("\r")
+            sys.stdout.write(prompt_text)
+            if len(text) - cursor > 0:
+                sys.stdout.write(f"\x1b[{len(text) - cursor}D")
+            sys.stdout.flush()
+            return len(text)
+
+        if sys.platform == "win32":
+            try:
+                import msvcrt
+            except Exception:
+                return input(prompt)
+
+            sys.stdout.write(prompt)
+            sys.stdout.flush()
+            buf: List[str] = []
+            cursor = 0
+            hist_idx = len(line_history)
+            last_draw_len = 0
+            while True:
+                ch = msvcrt.getwch()
+                if ch == "\r" or ch == "\n":
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+                    line = "".join(buf)
+                    _append_history(line)
+                    return line
+                if ch == "\x03":
+                    raise KeyboardInterrupt
+                if ch in ("\x00", "\xe0"):
+                    key = msvcrt.getwch()
+                    if key == "K" and cursor > 0:
+                        cursor -= 1
+                    elif key == "M" and cursor < len(buf):
+                        cursor += 1
+                    elif key == "H":
+                        if line_history:
+                            hist_idx = max(0, hist_idx - 1)
+                            buf = list(line_history[hist_idx])
+                            cursor = len(buf)
+                    elif key == "P":
+                        if line_history:
+                            hist_idx = min(len(line_history), hist_idx + 1)
+                            if hist_idx >= len(line_history):
+                                buf = []
+                            else:
+                                buf = list(line_history[hist_idx])
+                            cursor = len(buf)
+                    elif key == "G":
+                        cursor = 0
+                    elif key == "O":
+                        cursor = len(buf)
+                    elif key == "S":
+                        if cursor < len(buf):
+                            del buf[cursor]
+                    last_draw_len = _redraw(prompt, buf, cursor, last_draw_len)
+                    continue
+                if ch in ("\b", "\x7f"):
+                    if cursor > 0:
+                        del buf[cursor - 1]
+                        cursor -= 1
+                    last_draw_len = _redraw(prompt, buf, cursor, last_draw_len)
+                    continue
+                if ch >= " ":
+                    buf.insert(cursor, ch)
+                    cursor += 1
+                    last_draw_len = _redraw(prompt, buf, cursor, last_draw_len)
+                    continue
+
+        try:
+            import termios
+            import tty
+        except Exception:
+            return input(prompt)
+
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        sys.stdout.write(prompt)
+        sys.stdout.flush()
+        buf: List[str] = []
+        cursor = 0
+        hist_idx = len(line_history)
+        last_draw_len = 0
+
+        def _read_esc_sequence() -> str:
+            n1 = sys.stdin.read(1)
+            if not n1:
+                return ""
+            if n1 not in ("[", "O"):
+                return n1
+            n2 = sys.stdin.read(1)
+            if not n2:
+                return n1
+            if n2.isdigit():
+                seq = n2
+                while True:
+                    c = sys.stdin.read(1)
+                    if not c:
+                        break
+                    seq += c
+                    if c.isalpha() or c == "~":
+                        break
+                return n1 + seq
+            return n1 + n2
+
+        try:
+            tty.setraw(fd)
+            while True:
+                ch = sys.stdin.read(1)
+                if not ch:
+                    continue
+                if ch in ("\r", "\n"):
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+                    line = "".join(buf)
+                    _append_history(line)
+                    return line
+                if ch == "\x03":
+                    raise KeyboardInterrupt
+                if ch in ("\x7f", "\b"):
+                    if cursor > 0:
+                        del buf[cursor - 1]
+                        cursor -= 1
+                    last_draw_len = _redraw(prompt, buf, cursor, last_draw_len)
+                    continue
+                if ch == "\x04":
+                    if not buf:
+                        sys.stdout.write("\n")
+                        sys.stdout.flush()
+                        return "exit"
+                    continue
+                if ch == "\x1b":
+                    seq = _read_esc_sequence()
+                    if seq in ("[D",):
+                        if cursor > 0:
+                            cursor -= 1
+                    elif seq in ("[C",):
+                        if cursor < len(buf):
+                            cursor += 1
+                    elif seq in ("[A",):
+                        if line_history:
+                            hist_idx = max(0, hist_idx - 1)
+                            buf = list(line_history[hist_idx])
+                            cursor = len(buf)
+                    elif seq in ("[B",):
+                        if line_history:
+                            hist_idx = min(len(line_history), hist_idx + 1)
+                            if hist_idx >= len(line_history):
+                                buf = []
+                            else:
+                                buf = list(line_history[hist_idx])
+                            cursor = len(buf)
+                    elif seq in ("[H", "OH"):
+                        cursor = 0
+                    elif seq in ("[F", "OF"):
+                        cursor = len(buf)
+                    elif seq in ("[3~",):
+                        if cursor < len(buf):
+                            del buf[cursor]
+                    last_draw_len = _redraw(prompt, buf, cursor, last_draw_len)
+                    continue
+                if ch >= " ":
+                    buf.insert(cursor, ch)
+                    cursor += 1
+                    last_draw_len = _redraw(prompt, buf, cursor, last_draw_len)
+                    continue
+        finally:
+            try:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
+            except Exception:
+                pass
+
     # 初始化配置管理器
     config_file = os.path.join(get_repo_root(), "config.json")
     configManager = ConfigManager(config_file=config_file)
@@ -415,7 +615,7 @@ def run_cli() -> None:
             
             # 在提示符中显示当前工作目录
             current_dir = os.getcwd()
-            inputOfUser = input(f"\n{Fore.BLUE}{current_dir}{Style.RESET_ALL}\n{Style.BRIGHT}User: ")
+            inputOfUser = _read_user_line(f"\n{Fore.BLUE}{current_dir}{Style.RESET_ALL}\n{Style.BRIGHT}User: ")
             raw_cmd = inputOfUser.strip()
             if not raw_cmd:
                 continue
@@ -425,11 +625,11 @@ def run_cli() -> None:
             cmd = parts[0].lower()
             args = parts[1:]
             
-            if cmd in ["help", "?"]:
+            if raw_cmd.lower() in ["help", "?"]:
                 print_help_main()
                 continue
 
-            if cmd == "rollback":
+            if cmd == "rollback" and not args:
                 agent.rollbackLastOperation()
                 try:
                     if autosaveFilename:
@@ -438,7 +638,7 @@ def run_cli() -> None:
                     pass
                 continue
 
-            if cmd == "undo":
+            if cmd == "undo" and not args:
                 agent.rollbackLastChat()
                 try:
                     if autosaveFilename:
@@ -685,7 +885,7 @@ def run_cli() -> None:
                 display_history_messages(messages)
                 continue
 
-            if cmd in ["new"]:
+            if cmd in ["new"] and not args:
                 agent.historyOfMessages = []
                 agent.historyOfOperations = []
                 agent.lastFullMessages = []
@@ -702,7 +902,7 @@ def run_cli() -> None:
                 print(f"{Fore.GREEN}✓ 已新建会话{Style.RESET_ALL}")
                 continue
 
-            if cmd == "models":
+            if cmd == "models" and not args:
                 print_model_presets()
                 continue
 
@@ -832,7 +1032,7 @@ def run_cli() -> None:
                 print_help_whitelist()
                 continue
 
-            if cmd in ["exit", "quit"]:
+            if cmd in ["exit", "quit"] and not args:
                 if agent.historyOfMessages:
                     try:
                         if autosaveFilename:
@@ -842,7 +1042,7 @@ def run_cli() -> None:
                         pass
                 break
             
-            if cmd == "save":
+            if cmd == "save" and not args:
                 if agent.historyOfMessages:
                     session_name = input(f"{Fore.CYAN}输入会话名称 (可选，按回车跳过): {Style.RESET_ALL}").strip()
                     filename = sessionManager.save_session(agent.getFullHistory(), session_name or None, cache_stats=agent.statsOfCache.to_dict())
@@ -852,7 +1052,7 @@ def run_cli() -> None:
                     print(f"{Fore.YELLOW}当前没有会话历史{Style.RESET_ALL}")
                 continue
             
-            if cmd == "clear":
+            if cmd == "clear" and not args:
                 confirm = input(f"{Fore.YELLOW}确认清空会话历史? (y/n): {Style.RESET_ALL}").strip().lower()
                 if confirm == "y":
                     agent.historyOfMessages = []
