@@ -897,11 +897,6 @@ def run_cli() -> None:
                 t.start()
 
             agent.chat(inputOfUser, on_history_updated=persist_history)
-            try:
-                if autosaveFilename:
-                    sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
-            except Exception:
-                pass
             
         except KeyboardInterrupt:
             agent.interruptHandler.set_interrupted()
