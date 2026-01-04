@@ -120,6 +120,46 @@ def ensure_parent_dir(path_of_file: str) -> None:
     os.makedirs(os.path.dirname(path_of_file), exist_ok=True)
 
 
+def prune_directory(directory: str, max_files: int) -> int:
+    """
+    清理目录，保留最新的 max_files 个文件。
+    返回删除的文件数量。
+    """
+    if not os.path.exists(directory) or not os.path.isdir(directory):
+        return 0
+    
+    try:
+        # 获取目录下所有文件及其修改时间
+        files = []
+        for entry in os.scandir(directory):
+            if entry.is_file():
+                files.append((entry.path, entry.stat().st_mtime))
+        
+        # 如果文件数量未超过限制，则不处理
+        if len(files) <= max_files:
+            return 0
+        
+        # 按修改时间从旧到新排序
+        files.sort(key=lambda x: x[1])
+        
+        # 计算需要删除的数量
+        num_to_delete = len(files) - max_files
+        deleted_count = 0
+        
+        for i in range(num_to_delete):
+            file_path = files[i][0]
+            try:
+                os.remove(file_path)
+                deleted_count += 1
+            except Exception as e:
+                print(f"[DEBUG] 自动清理文件失败: {file_path}, 错误: {e}")
+        
+        return deleted_count
+    except Exception as e:
+        print(f"[DEBUG] 清理目录失败: {directory}, 错误: {e}")
+        return 0
+
+
 def read_lines_robust(path_of_file: str) -> List[str]:
     try:
         with open(path_of_file, "r", encoding="utf-8") as f:

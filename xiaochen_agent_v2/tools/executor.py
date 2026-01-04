@@ -615,32 +615,41 @@ class Tools:
         self.agent.printTaskProgress()
         return "SUCCESS: Task list\n" + self.agent.taskManager.render()
 
-    def ocr_image(self, t: Dict[str, Any]) -> str:
+    def ocr_image(self, t: Dict[str, Any], index: int = 1, total: int = 1) -> str:
         path = os.path.abspath(t["path"])
         try:
-            print_tool_execution_header("OCR Image", {"path": path})
+            print_tool_execution_header({"type": "ocr_image", "path": path}, index, total)
             result = ocr_image(path)
             if result.get("code") == 100:
                 text = result.get("text", "")
-                return f"SUCCESS: OCR completed\n\n{text}"
+                saved_path = result.get("saved_path", "")
+                save_msg = f"\n(结果已保存至: {saved_path})" if saved_path else ""
+                return f"SUCCESS: OCR completed{save_msg}\n\n{text}"
             else:
                 return f"FAILURE: OCR failed (code: {result.get('code')})\nError: {result.get('data')}"
         except Exception as e:
             return f"FAILURE: {str(e)}"
 
-    def ocr_document(self, t: Dict[str, Any]) -> str:
+    def ocr_document(self, t: Dict[str, Any], index: int = 1, total: int = 1) -> str:
         path = os.path.abspath(t["path"])
         page_start = int(t.get("page_start") or 1)
         page_end = t.get("page_end")
-        if page_end:
+        if page_end is not None:
             page_end = int(page_end)
-            
+        
         try:
-            print_tool_execution_header("OCR Document", {"path": path, "page_start": page_start, "page_end": page_end})
+            print_tool_execution_header({
+                "type": "ocr_document",
+                "path": path,
+                "page_start": page_start,
+                "page_end": page_end
+            }, index, total)
             result = ocr_document(path, page_start=page_start, page_end=page_end)
             if result.get("code") == 100:
                 text = result.get("text", "")
-                return f"SUCCESS: Document OCR completed\n\n{text}"
+                saved_path = result.get("saved_path", "")
+                save_msg = f"\n(结果已保存至: {saved_path})" if saved_path else ""
+                return f"SUCCESS: Document OCR completed{save_msg}\n\n{text}"
             else:
                 return f"FAILURE: Document OCR failed (code: {result.get('code')})\nError: {result.get('data')}"
         except Exception as e:

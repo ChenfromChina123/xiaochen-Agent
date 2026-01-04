@@ -150,6 +150,7 @@ agent.bat
 - **清空历史**：输入 `clear` 清空会话历史
 - **回滚操作**：输入 `rollback` 撤销上一次文件操作
 - **一键回退对话**：输入 `undo` 回退到上一次对话（含文件修改）
+- **撤回粘贴**：输入 `cancel` 或 `撤回` 撤回当前已通过 Ctrl+V 粘贴但未发送的图片
 - **查看会话列表**：输入 `sessions` 查看最近 10 个历史会话
 - **删除会话**：输入 `sessions delete <n...|--all> [-y]` 删除指定或所有会话
 - **清理会话**：输入 `sessions prune [--max-files N] [--max-age-days D] [-y]` 清理会话

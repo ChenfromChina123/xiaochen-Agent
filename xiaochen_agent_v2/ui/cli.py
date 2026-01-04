@@ -2,7 +2,8 @@ import os
 import sys
 import threading
 import time
-from typing import List, Dict
+from typing import List, Dict, Optional
+import keyboard  # 用于监听热键，需要 pip install keyboard
 
 from ..core.agent import VoidAgent
 from ..core.config import Config
@@ -13,8 +14,8 @@ from ..core.config_manager import ConfigManager
 from ..utils.process_tracker import ProcessTracker
 
 
-from ..utils.files import get_repo_root
-from ..tools import save_clipboard_image, is_image_path
+from ..utils.files import get_repo_root, prune_directory
+from ..tools import save_clipboard_image, is_image_path, get_clipboard_text
 
 def run_cli() -> None:
     """
@@ -346,6 +347,9 @@ def run_cli() -> None:
         print("sessions -help        会话管理（查看/加载/新建）")
         print("model -help           模型管理（查看/切换/配置）")
         print("whitelist -help       白名单管理（查看/修改）")
+        print("paste                 进入粘贴模式，保存长文本到文件并通知 Agent")
+        print("快捷键 [Ctrl+V]       实时识别并分析剪贴板图片（无需回车）")
+        print("cancel / 撤回         撤回当前已粘贴但未发送的图片")
         print("rollback              回退最近一次文件修改")
         print("undo                  一键回退到上一次对话（含文件修改）")
         print("save                  保存当前会话")
@@ -429,6 +433,30 @@ def run_cli() -> None:
         except Exception:
             pass
 
+    pending_pastes = []  # 存储当前待处理的粘贴文件路径
+
+    def handle_clipboard_shortcut():
+        """监听 Ctrl+V 快捷键，实时处理图片"""
+        nonlocal pending_pastes
+        paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
+        img_path = save_clipboard_image(save_dir=paste_dir)
+        if img_path:
+            pending_pastes.append(img_path)
+            filename = os.path.basename(img_path)
+            print(f"\n{Fore.GREEN}[已粘贴] {filename} (当前共 {len(pending_pastes)} 个文件){Style.RESET_ALL}")
+            print(f"{Fore.CYAN}[提示] 继续粘贴图片，或直接按【回车】发送分析，输入 'cancel' 撤回。{Style.RESET_ALL}")
+            # 自动清理旧文件
+            prune_directory(paste_dir, 50)
+        else:
+            # 如果不是图片，不做任何处理，让系统原生的 Ctrl+V 处理文本粘贴
+            pass
+
+    # 注册全局热键监听 (仅在 Windows 下有效且需要管理员权限)
+    try:
+        keyboard.add_hotkey('ctrl+v', handle_clipboard_shortcut)
+    except:
+        pass
+
     while True:
         try:
             # 重置中断标志
@@ -436,29 +464,63 @@ def run_cli() -> None:
             
             # 在提示符中显示当前工作目录
             current_dir = os.getcwd()
-            inputOfUser = _normalize_user_input(input(f"\n{Fore.BLUE}{current_dir}{Style.RESET_ALL}\n{Style.BRIGHT}User: "))
+            prompt = f"\n{Fore.BLUE}{current_dir}{Style.RESET_ALL}\n{Style.BRIGHT}User: "
+            inputOfUser = _normalize_user_input(input(prompt))
             
-            # 优化图片/文档处理流程
-            # 1. 检查是否直接粘贴了图片/文档路径
-            if is_image_path(inputOfUser):
+            # 优化内容处理流程 (支持直接粘贴路径、剪贴板图片、剪贴板多行文本)
+            
+            # 1. 如果输入为空，尝试从剪贴板获取内容
+            if not inputOfUser.strip():
+                if pending_pastes:
+                    # 如果有待处理的粘贴，则整合发送
+                    paths_str = "\n".join([f"- {p}" for p in pending_pastes])
+                    inputOfUser = f"请识别并分析以下图片/文档：\n{paths_str}"
+                    print(f"{Fore.GREEN}[系统] 正在分析 {len(pending_pastes)} 张图片...{Style.RESET_ALL}")
+                    pending_pastes = [] # 发送后清空
+                else:
+                    # 尝试获取图片 (优先图片，因为 PIL 抓取图片很准确)
+                    paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
+                    print(f"{Fore.YELLOW}[系统] 正在检查剪贴板内容...{Style.RESET_ALL}", end="\r")
+                    img_path = save_clipboard_image(save_dir=paste_dir)
+                    if img_path:
+                        inputOfUser = f"请识别并分析这张图片/文档: {img_path}"
+                        print(f"{Fore.GREEN}[系统] 已从剪贴板保存并加载图片: {img_path}{Style.RESET_ALL}")
+                        # 自动清理旧文件
+                        prune_directory(paste_dir, 50)
+                    else:
+                        # 尝试获取文本 (支持多行)
+                        cb_text = get_clipboard_text()
+                        if cb_text:
+                            inputOfUser = cb_text
+                            # 显示文本预览
+                            lines = cb_text.splitlines()
+                            if len(lines) > 1:
+                                print(f"{Fore.GREEN}[系统] 已从剪贴板获取多行文本 ({len(lines)} 行){Style.RESET_ALL}")
+                            else:
+                                preview = cb_text[:50] + "..." if len(cb_text) > 50 else cb_text
+                                print(f"{Fore.GREEN}[系统] 已从剪贴板获取文本: {preview}{Style.RESET_ALL}")
+                        else:
+                            print(f"{Fore.RED}[系统] 剪贴板中未发现可识别的图片或文本内容。{Style.RESET_ALL}")
+                            # 既没有图片也没有文本，继续循环
+                            continue
+            
+            # 2. 如果输入不为空，检查是否为文件路径
+            elif is_image_path(inputOfUser):
                 img_path = inputOfUser.strip().strip('"').strip("'")
                 inputOfUser = f"请识别并分析这张图片/文档: {img_path}"
                 print(f"{Fore.GREEN}[系统] 已检测到粘贴的文件路径: {img_path}{Style.RESET_ALL}")
             
-            # 2. 如果输入包含关键词或为空，尝试从剪贴板获取图片
+            # 3. 如果是普通文本但包含图片关键词，再次检查剪贴板图片 (兼容旧逻辑)
             else:
                 image_keywords = ["图片", "图", "识别", "ocr", "看下", "分析", "image", "pic", "这张"]
-                has_image_keyword = any(k in inputOfUser for k in image_keywords)
-                
-                # 如果输入为空，或者是包含关键词的短语，尝试检查剪贴板
-                if (has_image_keyword and len(inputOfUser) < 20) or not inputOfUser.strip():
-                    img_path = save_clipboard_image()
+                if any(k in inputOfUser.lower() for k in image_keywords) and len(inputOfUser) < 20:
+                    paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
+                    img_path = save_clipboard_image(save_dir=paste_dir)
                     if img_path:
-                        if not inputOfUser.strip():
-                            inputOfUser = f"请识别并分析这张图片: {img_path}"
-                        else:
-                            inputOfUser += f" (图片已自动保存: {img_path})"
+                        inputOfUser += f" (图片已自动保存: {img_path})"
                         print(f"{Fore.GREEN}[系统] 已检测并保存剪贴板图片: {img_path}{Style.RESET_ALL}")
+                        # 自动清理旧文件
+                        prune_directory(paste_dir, 50)
 
             raw_cmd = inputOfUser.strip()
             if not raw_cmd:
@@ -472,6 +534,53 @@ def run_cli() -> None:
             if raw_cmd.lower() in ["help", "?"]:
                 print_help_main()
                 continue
+
+            if raw_cmd.lower() in ["cancel", "撤回"]:
+                if pending_pastes:
+                    count = len(pending_pastes)
+                    pending_pastes = []
+                    print(f"{Fore.YELLOW}✓ 已撤回当前待处理的 {count} 张图片。{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.YELLOW}当前没有待处理的粘贴内容。{Style.RESET_ALL}")
+                continue
+
+            if cmd == "paste":
+                print(f"\n{Fore.CYAN}--- 进入粘贴模式 ---{Style.RESET_ALL}")
+                print(f"{Fore.YELLOW}请粘贴您的内容。输入完成后，请在一行中输入 ':wq' 或按 Ctrl+Z (Win) 然后回车结束并保存。{Style.RESET_ALL}")
+                
+                paste_lines = []
+                while True:
+                    try:
+                        line = input()
+                        if line.strip() == ":wq":
+                            break
+                        paste_lines.append(line)
+                    except EOFError:
+                        break
+                
+                content = "\n".join(paste_lines)
+                if not content.strip():
+                    print(f"{Fore.RED}✗ 内容为空，已取消保存。{Style.RESET_ALL}")
+                    continue
+                
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
+                os.makedirs(paste_dir, exist_ok=True)
+                
+                file_path = os.path.abspath(os.path.join(paste_dir, f"paste_{timestamp}.txt"))
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                
+                print(f"{Fore.GREEN}✓ 内容已保存至: {file_path}{Style.RESET_ALL}")
+                
+                # 自动清理旧文件
+                prune_directory(paste_dir, 50)
+                
+                # 自动构造发送给 Agent 的消息
+                inputOfUser = f"我刚才粘贴了一段内容并保存到了文件：{file_path}\n请阅读并处理该文件中的内容。"
+                print(f"{Fore.CYAN}[系统] 已自动构造消息发送给 Agent。{Style.RESET_ALL}")
+                # 注意：这里不需要 continue，因为我们希望这个 inputOfUser 被发送给 agent.chat()
 
             if cmd == "rollback" and not args:
                 agent.rollbackLastOperation()

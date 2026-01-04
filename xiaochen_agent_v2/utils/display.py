@@ -84,6 +84,16 @@ def format_tool_display(task: Dict[str, Any]) -> str:
         glob_pattern = task.get("glob", "**/*")
         return f"🔎 搜索内容: {regex} (文件: {glob_pattern})"
     
+    elif task_type == "ocr_image":
+        path = task.get("path", "")
+        return f"🖼️  OCR 识别图片: {path}"
+    
+    elif task_type == "ocr_document":
+        path = task.get("path", "")
+        start = task.get("page_start", 1)
+        end = task.get("page_end", "末尾")
+        return f"📄 OCR 识别文档: {path} (页码 {start}-{end})"
+    
     elif task_type.startswith("task_"):
         action = task_type.replace("task_", "")
         if action == "add":

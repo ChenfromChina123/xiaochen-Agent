@@ -6,7 +6,34 @@
 
 import os
 import datetime
+import subprocess
 from PIL import Image, ImageGrab
+
+def get_clipboard_text():
+    """
+    使用 PowerShell 获取剪贴板中的文本内容内容
+    
+    返回:
+        字符串内容，如果不是文本或获取失败则返回 None
+    """
+    try:
+        # 使用 powershell 获取剪贴板文本
+        # -Raw 参数保留原始换行符
+        process = subprocess.Popen(
+            ['powershell', '-NoProfile', '-Command', 'Get-Clipboard -Raw'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8'
+        )
+        stdout, stderr = process.communicate(timeout=5)
+        
+        if process.returncode == 0 and stdout.strip():
+            return stdout.strip()
+        return None
+    except Exception as e:
+        print(f"[DEBUG] 获取剪贴板文本失败: {e}")
+        return None
 
 def save_clipboard_image(save_dir="attachments"):
     """
@@ -19,8 +46,14 @@ def save_clipboard_image(save_dir="attachments"):
         成功返回保存的绝对路径，失败返回 None
     """
     try:
-        # 获取剪贴板中的图片
+        # 记录调试信息
+        # print("[DEBUG] 尝试从剪贴板抓取内容...")
+        
+        # 获取剪贴板中的内容
         img = ImageGrab.grabclipboard()
+        
+        # 调试信息: 打印抓取到的对象类型
+        # print(f"[DEBUG] 抓取到的对象类型: {type(img)}")
         
         if isinstance(img, Image.Image):
             # 确保目录存在
@@ -38,9 +71,37 @@ def save_clipboard_image(save_dir="attachments"):
         
         elif isinstance(img, list):
             # 如果剪贴板里是文件列表（比如在文件管理器里复制了图片文件）
+            # print(f"[DEBUG] 检测到文件列表: {img}")
             for item in img:
                 if isinstance(item, str) and item.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
                     return os.path.abspath(item)
+                    
+        # 特殊处理：如果上述失败，尝试使用 PowerShell 检查是否有位图
+        # print("[DEBUG] Pillow 抓取失败，尝试备选方案...")
+        try:
+            import subprocess
+            # 检查剪贴板是否包含位图格式
+            check_cmd = ['powershell', '-NoProfile', '-Command', 'Get-Clipboard -Format Image']
+            # 注意：Get-Clipboard -Format Image 返回的是 System.Drawing.Bitmap 对象
+            # 我们通过判断命令是否执行成功且有输出来确定
+            
+            # 另一个更可靠的方法是使用 PowerShell 将图片保存到临时文件
+            temp_img = os.path.join(save_dir, f"temp_clip_{datetime.datetime.now().strftime('%H%M%S')}.png")
+            save_cmd = [
+                'powershell', '-NoProfile', '-Command', 
+                f'$img = Get-Clipboard -Format Image; if ($img) {{ $img.Save("{temp_img}", [System.Drawing.Imaging.ImageFormat]::Png); echo "SUCCESS" }}'
+            ]
+            
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+                
+            res = subprocess.run(save_cmd, capture_output=True, text=True)
+            if "SUCCESS" in res.stdout and os.path.exists(temp_img):
+                # print(f"[DEBUG] PowerShell 方案成功保存: {temp_img}")
+                return os.path.abspath(temp_img)
+        except Exception as e:
+            # print(f"[DEBUG] PowerShell 备选方案失败: {e}")
+            pass
                     
         return None
     except Exception as e:
