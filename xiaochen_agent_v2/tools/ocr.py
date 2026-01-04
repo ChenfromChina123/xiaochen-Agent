@@ -8,13 +8,12 @@ import os
 import sys
 import json
 import datetime
+import requests
 from typing import Dict, Any, Optional
 
-# 动态添加路径以便导入 ocr_core
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
-OCR_CORE_DIR = os.path.abspath(os.path.join(CURRENT_DIR, "ocr_core"))
-STORAGE_DIR = os.path.join(PROJECT_ROOT, "storage", "ocr_results")
+# OCR 后端服务配置
+OCR_SERVER_URL = "http://localhost:5000"
+STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "storage", "ocr_results")
 
 # 导入清理工具
 try:
@@ -27,17 +26,6 @@ MAX_STORAGE_FILES = 50  # 默认最大保存条数
 if not os.path.exists(STORAGE_DIR):
     os.makedirs(STORAGE_DIR, exist_ok=True)
 
-if OCR_CORE_DIR not in sys.path:
-    sys.path.insert(0, OCR_CORE_DIR)
-
-try:
-    from .ocr_core.ocr_engine import OCREngine
-except (ImportError, ValueError):
-    try:
-        from ocr_engine import OCREngine
-    except ImportError:
-        OCREngine = None
-
 def _save_result_locally(file_path: str, result: Dict[str, Any]) -> str:
     """
     将 OCR 结果保存到本地文件
@@ -49,7 +37,8 @@ def _save_result_locally(file_path: str, result: Dict[str, Any]) -> str:
     返回:
         保存的文件路径
     """
-    if not result or result.get("code") != 100:
+    # 后端服务返回的格式中，成功标志在 success 字段
+    if not result.get("success"):
         return ""
     
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -60,7 +49,22 @@ def _save_result_locally(file_path: str, result: Dict[str, Any]) -> str:
     txt_filename = f"{file_name_without_ext}_{timestamp}.txt"
     txt_path = os.path.join(STORAGE_DIR, txt_filename)
     
-    text_content = result.get("text", "")
+    # 后端服务返回的数据在 data.text 中（如果请求了 extract_text）
+    # 或者在 data.ocr_result.text 中
+    data = result.get("data", {})
+    text_content = data.get("text", "")
+    
+    if not text_content and "ocr_result" in data:
+        ocr_res = data["ocr_result"]
+        if "text" in ocr_res:
+            text_content = ocr_res["text"]
+        elif "data" in ocr_res and isinstance(ocr_res["data"], list):
+            # 如果是原始结果列表，拼接文本
+            text_content = "\n".join([item.get("text", "") for item in ocr_res["data"]])
+
+    if not text_content:
+        return ""
+
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write(text_content)
     
@@ -72,7 +76,7 @@ def _save_result_locally(file_path: str, result: Dict[str, Any]) -> str:
 
 def ocr_image(image_path: str) -> Dict[str, Any]:
     """
-    对图片进行 OCR 识别，并自动保存结果到本地
+    通过后端服务对图片进行 OCR 识别，并自动保存结果到本地
     
     参数:
         image_path: 图片文件的绝对路径
@@ -80,32 +84,36 @@ def ocr_image(image_path: str) -> Dict[str, Any]:
     返回:
         包含识别结果的字典
     """
-    if OCREngine is None:
-        return {"code": 500, "data": "OCR 核心模块导入失败，请检查路径。"}
-    
     if not os.path.exists(image_path):
-        return {"code": 404, "data": f"图片文件不存在: {image_path}"}
+        return {"success": False, "message": f"图片文件不存在: {image_path}"}
     
-    # 配置文件路径
-    config_path = os.path.join(OCR_CORE_DIR, "config.json")
+    url = f"{OCR_SERVER_URL}/api/ocr/file"
     
     try:
-        # 使用 with 语句自动管理引擎生命周期
-        with OCREngine(config_path) as engine:
-            result = engine.recognize_image(image_path)
-            if result.get("code") == 100:
-                # 提取纯文本方便 Agent 阅读
-                result["text"] = engine.extract_text(result)
-                # 保存到本地
-                save_path = _save_result_locally(image_path, result)
-                result["saved_path"] = save_path
-            return result
+        with open(image_path, 'rb') as f:
+            files = {'file': f}
+            data = {'extract_text': 'true'}
+            response = requests.post(url, files=files, data=data, timeout=30)
+            
+        if response.status_code != 200:
+            return {"success": False, "message": f"服务器返回错误: {response.status_code}"}
+            
+        result = response.json()
+        if result.get("success"):
+            # 保存到本地
+            save_path = _save_result_locally(image_path, result)
+            if "data" in result:
+                result["data"]["saved_path"] = save_path
+        return result
+        
+    except requests.exceptions.ConnectionError:
+        return {"success": False, "message": "无法连接到 OCR 后端服务，请确保服务已启动。"}
     except Exception as e:
-        return {"code": 500, "data": f"OCR 识别执行异常: {str(e)}"}
+        return {"success": False, "message": f"OCR 识别执行异常: {str(e)}"}
 
 def ocr_document(doc_path: str, page_start: int = 1, page_end: Optional[int] = None) -> Dict[str, Any]:
     """
-    对 PDF 等文档文件进行 OCR 识别，并自动保存结果到本地
+    通过后端服务对 PDF 等文档文件进行 OCR 识别，并自动保存结果到本地
     
     参数:
         doc_path: 文档文件的绝对路径
@@ -115,31 +123,35 @@ def ocr_document(doc_path: str, page_start: int = 1, page_end: Optional[int] = N
     返回:
         包含识别结果的字典
     """
-    if OCREngine is None:
-        return {"code": 500, "data": "OCR 核心模块导入失败，请检查路径。"}
-    
     if not os.path.exists(doc_path):
-        return {"code": 404, "data": f"文档文件不存在: {doc_path}"}
+        return {"success": False, "message": f"文档文件不存在: {doc_path}"}
     
-    config_path = os.path.join(OCR_CORE_DIR, "config.json")
+    url = f"{OCR_SERVER_URL}/api/ocr/document"
     
     try:
-        with OCREngine(config_path) as engine:
-            if hasattr(engine, 'recognize_document'):
-                page_range = None
-                if page_end is not None:
-                    page_range = [page_start, page_end]
-                elif page_start > 1:
-                    page_range = [page_start, 9999] 
+        with open(doc_path, 'rb') as f:
+            files = {'file': f}
+            payload = {
+                'page_range_start': str(page_start),
+                'extract_text': 'true'
+            }
+            if page_end is not None:
+                payload['page_range_end'] = str(page_end)
                 
-                result = engine.recognize_document(doc_path, page_range=page_range)
-                if result.get("code") == 100:
-                    result["text"] = engine.extract_text(result)
-                    # 保存到本地
-                    save_path = _save_result_locally(doc_path, result)
-                    result["saved_path"] = save_path
-                return result
-            else:
-                return {"code": 501, "data": "当前 OCR 引擎不支持文档识别"}
+            response = requests.post(url, files=files, data=payload, timeout=60)
+            
+        if response.status_code != 200:
+            return {"success": False, "message": f"服务器返回错误: {response.status_code}"}
+            
+        result = response.json()
+        if result.get("success"):
+            # 保存到本地
+            save_path = _save_result_locally(doc_path, result)
+            if "data" in result:
+                result["data"]["saved_path"] = save_path
+        return result
+        
+    except requests.exceptions.ConnectionError:
+        return {"success": False, "message": "无法连接到 OCR 后端服务，请确保服务已启动。"}
     except Exception as e:
-        return {"code": 500, "data": f"文档 OCR 识别执行异常: {str(e)}"}
+        return {"success": False, "message": f"文档 OCR 识别执行异常: {str(e)}"}

@@ -620,13 +620,21 @@ class Tools:
         try:
             print_tool_execution_header({"type": "ocr_image", "path": path}, index, total)
             result = ocr_image(path)
-            if result.get("code") == 100:
-                text = result.get("text", "")
-                saved_path = result.get("saved_path", "")
+            if result.get("success") or result.get("code") == 100:
+                # 兼容新旧格式
+                data = result.get("data", {})
+                if isinstance(data, dict):
+                    text = data.get("text", result.get("text", ""))
+                    saved_path = data.get("saved_path", result.get("saved_path", ""))
+                else:
+                    text = result.get("text", "")
+                    saved_path = result.get("saved_path", "")
+                    
                 save_msg = f"\n(结果已保存至: {saved_path})" if saved_path else ""
                 return f"SUCCESS: OCR completed{save_msg}\n\n{text}"
             else:
-                return f"FAILURE: OCR failed (code: {result.get('code')})\nError: {result.get('data')}"
+                msg = result.get("message") or result.get("data") or "Unknown error"
+                return f"FAILURE: OCR failed\nError: {msg}"
         except Exception as e:
             return f"FAILURE: {str(e)}"
 
@@ -645,12 +653,20 @@ class Tools:
                 "page_end": page_end
             }, index, total)
             result = ocr_document(path, page_start=page_start, page_end=page_end)
-            if result.get("code") == 100:
-                text = result.get("text", "")
-                saved_path = result.get("saved_path", "")
+            if result.get("success") or result.get("code") == 100:
+                # 兼容新旧格式
+                data = result.get("data", {})
+                if isinstance(data, dict):
+                    text = data.get("text", result.get("text", ""))
+                    saved_path = data.get("saved_path", result.get("saved_path", ""))
+                else:
+                    text = result.get("text", "")
+                    saved_path = result.get("saved_path", "")
+                    
                 save_msg = f"\n(结果已保存至: {saved_path})" if saved_path else ""
                 return f"SUCCESS: Document OCR completed{save_msg}\n\n{text}"
             else:
-                return f"FAILURE: Document OCR failed (code: {result.get('code')})\nError: {result.get('data')}"
+                msg = result.get("message") or result.get("data") or "Unknown error"
+                return f"FAILURE: Document OCR failed\nError: {msg}"
         except Exception as e:
             return f"FAILURE: {str(e)}"
