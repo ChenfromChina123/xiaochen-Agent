@@ -44,9 +44,8 @@ from ..utils.logs import append_edit_history, append_usage_history, log_request,
 from .metrics import CacheStats
 from ..utils.tags import parse_stack_of_tags
 from ..utils.terminal import TerminalManager
-from ..utils.web_search import web_search, visit_page, format_search_results
+from ..tools import web_search, visit_page, Tools
 from .task_manager import TaskManager, TaskItem
-from .tools import Tools
 from .utils import detect_ruff_runner, validate_python_file, require_requests
 
 

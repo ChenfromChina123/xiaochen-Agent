@@ -24,9 +24,9 @@ from ..utils.files import (
 )
 from ..utils.display import print_tool_execution_header
 from ..utils.logs import append_edit_history
-from ..utils.web_search import web_search, visit_page, format_search_results
-from ..utils.ocr import ocr_image, ocr_document
-from .utils import validate_python_file
+from .web_search import web_search, visit_page, format_search_results
+from .ocr import ocr_image, ocr_document
+from ..core.utils import validate_python_file
 
 class Tools:
     def __init__(self, agent):

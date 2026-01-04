@@ -14,7 +14,7 @@ from ..utils.process_tracker import ProcessTracker
 
 
 from ..utils.files import get_repo_root
-from ..utils.image import save_clipboard_image, is_image_path
+from ..tools import save_clipboard_image, is_image_path
 
 def run_cli() -> None:
     """
