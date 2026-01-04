@@ -189,15 +189,16 @@ def ocr_file():
                 message=f"不支持的文件格式: {file.filename}"
             )
         
-        # 保存临时文件
+        # 获取引擎和文件扩展名
+        engine = init_ocr_engine()
         filename = secure_filename(file.filename)
-        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"ocr_temp_{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}")
-        file.save(temp_path)
+        ext = os.path.splitext(filename)[-1].lower()
         
-        try:
-            # OCR识别
-            engine = init_ocr_engine()
-            result = engine.recognize_image(temp_path)
+        # 区分图片和文档处理
+        if ext in engine.SUPPORTED_IMAGE_FORMATS:
+            # 图片处理：直接读取字节流，避免产生临时文件导致的文件占用问题
+            file_bytes = file.read()
+            result = engine.recognize_bytes(file_bytes)
             
             # 是否只返回文本
             extract_text = request.form.get('extract_text', 'false').lower() == 'true'
@@ -219,10 +220,42 @@ def ocr_file():
                         'ocr_result': result
                     }
                 )
-        finally:
-            # 删除临时文件
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+        else:
+            # 文档处理：仍需保存临时文件（PyMuPDF需要路径）
+            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"ocr_temp_{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}")
+            file.save(temp_path)
+            
+            try:
+                # OCR识别
+                result = engine.recognize_image(temp_path)
+                
+                # 是否只返回文本
+                extract_text = request.form.get('extract_text', 'false').lower() == 'true'
+                
+                if extract_text and result.get('code') == 100:
+                    text = engine.extract_text(result)
+                    return format_response(
+                        success=True,
+                        message="识别成功",
+                        data={'text': text, 'filename': filename}
+                    )
+                else:
+                    return format_response(
+                        success=result.get('code') == 100,
+                        code=200 if result.get('code') == 100 else 400,
+                        message="识别成功" if result.get('code') == 100 else f"识别失败: {result.get('data')}",
+                        data={
+                            'filename': filename,
+                            'ocr_result': result
+                        }
+                    )
+            finally:
+                # 安全删除临时文件
+                if os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except Exception as e:
+                        print(f"[警告] 无法删除临时文件 {temp_path}: {e}")
                 
     except Exception as e:
         return format_response(
@@ -459,42 +492,61 @@ def ocr_batch():
         try:
             engine = init_ocr_engine()
             
-            # 保存所有临时文件
+            # 收集文件并识别
             for file in files:
                 if file.filename == '':
                     continue
                 
-                if not allowed_file(file.filename):
-                    results.append({
-                        'filename': file.filename,
-                        'success': False,
-                        'message': '不支持的文件格式'
-                    })
-                    continue
-                
                 filename = secure_filename(file.filename)
-                temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"ocr_batch_{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}")
-                file.save(temp_path)
-                temp_files.append((temp_path, filename))
-            
-            # 批量识别
-            for temp_path, filename in temp_files:
+                ext = os.path.splitext(filename)[-1].lower()
+                
                 try:
-                    result = engine.recognize_image(temp_path)
-                    
-                    if extract_text and result.get('code') == 100:
-                        text = engine.extract_text(result)
-                        results.append({
-                            'filename': filename,
-                            'success': True,
-                            'text': text
-                        })
+                    if ext in engine.SUPPORTED_IMAGE_FORMATS:
+                        # 图片处理：直接读取字节流
+                        file_bytes = file.read()
+                        result = engine.recognize_bytes(file_bytes)
+                        
+                        if extract_text and result.get('code') == 100:
+                            text = engine.extract_text(result)
+                            results.append({
+                                'filename': filename,
+                                'success': True,
+                                'text': text
+                            })
+                        else:
+                            results.append({
+                                'filename': filename,
+                                'success': result.get('code') == 100,
+                                'ocr_result': result
+                            })
                     else:
-                        results.append({
-                            'filename': filename,
-                            'success': result.get('code') == 100,
-                            'ocr_result': result
-                        })
+                        # 文档处理：保存临时文件
+                        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"ocr_batch_{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}")
+                        file.save(temp_path)
+                        
+                        try:
+                            result = engine.recognize_image(temp_path)
+                            
+                            if extract_text and result.get('code') == 100:
+                                text = engine.extract_text(result)
+                                results.append({
+                                    'filename': filename,
+                                    'success': True,
+                                    'text': text
+                                })
+                            else:
+                                results.append({
+                                    'filename': filename,
+                                    'success': result.get('code') == 100,
+                                    'ocr_result': result
+                                })
+                        finally:
+                            # 安全删除临时文件
+                            if os.path.exists(temp_path):
+                                try:
+                                    os.remove(temp_path)
+                                except Exception as e:
+                                    print(f"[警告] 无法删除临时文件 {temp_path}: {e}")
                 except Exception as e:
                     results.append({
                         'filename': filename,
