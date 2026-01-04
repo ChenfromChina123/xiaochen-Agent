@@ -1,0 +1,8 @@
+# OCR后端服务依赖包
+Flask>=2.3.0
+Flask-CORS>=4.0.0
+Pillow>=9.0.0
+PyMuPDF>=1.23.0
+requests>=2.31.0
+werkzeug>=2.3.0
+

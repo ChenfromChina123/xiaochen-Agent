@@ -20,5 +20,9 @@ logs/
 *.lib
 
 
+# OCR results
+xiaochen_agent_v2/storage/ocr_results/
+xiaochen_agent_v2/storage/pastes/
+
 .DS_Store
 Thumbs.db

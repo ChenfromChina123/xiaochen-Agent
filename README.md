@@ -14,13 +14,13 @@
 | `snake_game/` | 网页版贪吃蛇游戏 |
 | `xiaochen_agent_v2/` | 小晨智能体V2核心模块 (分层架构) |
 | &nbsp;&nbsp;├── `core/` | 核心逻辑 (智能体, 配置, 会话) |
+| &nbsp;&nbsp;├── `tools/` | 外部工具集成 (OCR, 搜索, 网页访问) |
+| &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── `ocr_core/` | OCR 核心引擎 (基于 PaddleOCR-json) |
 | &nbsp;&nbsp;├── `ui/` | 界面逻辑 (CLI) |
 | &nbsp;&nbsp;├── `utils/` | 工具类 (控制台, 文件操作) |
 | &nbsp;&nbsp;└── `scripts/` | 安装与启动脚本 |
 | `webpage/` | 网页相关资源或前端组件 |
 | `logs/` | 应用程序日志存储目录 |
-| `mcp/` | 外部集成模块 (MCP) |
-| &nbsp;&nbsp;└── `ocr_core/` | OCR 核心引擎 (基于 PaddleOCR-json) |
 | `__pycache__/` | 编译的Python文件（自动生成） |
 | `.trae/` | 配置或临时文件目录 |
 | `userrules` | 项目特定用户规则和指南 |
@@ -66,7 +66,7 @@
 18. **Linux 兼容性**: 提供了 `build_linux.sh` 脚本，可在 Linux 环境下构建独立的可执行文件。
 19. **当前目录提示**: 命令提示符会实时显示当前工作目录，且该目录状态不会随 AI 模型切换而丢失。
 20. **OCR 工具集成**: 系统集成了基于 PaddleOCR-json 的 OCR 功能，支持图片和 PDF 文档识别。Agent 调用时仅返回纯文本内容，过滤了坐标和置信度等冗余信息。
-21. **粘贴图片优化**: 命令行支持直接粘贴图片路径或从剪贴板自动识别图片。当用户在聊天框输入“识别这张图”或直接按回车（且剪贴板有图）时，系统会自动将图片保存到 `attachments/` 目录并通知 Agent 处理。
+21. **粘贴图片优化**: 命令行支持直接粘贴图片路径或从剪贴板自动识别图片。支持 **Ctrl+V** 实时识别，系统会即时显示已粘贴的文件名（支持多图连贴），输入 `cancel` 或 `撤回` 可撤回当前待处理的图片，按回车即可发送分析。图片会自动保存到 `xiaochen_agent_v2/storage/pastes/` 目录。
 
 ## 重要规则
 请参考 `userrules` 文件了解详细的项目规则和指南。

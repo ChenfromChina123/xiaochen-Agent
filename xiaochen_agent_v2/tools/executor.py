@@ -640,10 +640,13 @@ class Tools:
 
     def ocr_document(self, t: Dict[str, Any], index: int = 1, total: int = 1) -> str:
         path = os.path.abspath(t["path"])
-        page_start = int(t.get("page_start") or 1)
-        page_end = t.get("page_end")
-        if page_end is not None:
-            page_end = int(page_end)
+        
+        # 安全地解析页码参数，防止空字符串导致 int() 报错
+        raw_start = t.get("page_start")
+        page_start = int(raw_start) if raw_start and str(raw_start).strip() else 1
+        
+        raw_end = t.get("page_end")
+        page_end = int(raw_end) if raw_end and str(raw_end).strip() else None
         
         try:
             print_tool_execution_header({
