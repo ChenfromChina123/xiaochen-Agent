@@ -14,6 +14,7 @@ from ..utils.process_tracker import ProcessTracker
 
 
 from ..utils.files import get_repo_root
+from ..utils.image import save_clipboard_image, is_image_path
 
 def run_cli() -> None:
     """
@@ -436,6 +437,29 @@ def run_cli() -> None:
             # 在提示符中显示当前工作目录
             current_dir = os.getcwd()
             inputOfUser = _normalize_user_input(input(f"\n{Fore.BLUE}{current_dir}{Style.RESET_ALL}\n{Style.BRIGHT}User: "))
+            
+            # 优化图片/文档处理流程
+            # 1. 检查是否直接粘贴了图片/文档路径
+            if is_image_path(inputOfUser):
+                img_path = inputOfUser.strip().strip('"').strip("'")
+                inputOfUser = f"请识别并分析这张图片/文档: {img_path}"
+                print(f"{Fore.GREEN}[系统] 已检测到粘贴的文件路径: {img_path}{Style.RESET_ALL}")
+            
+            # 2. 如果输入包含关键词或为空，尝试从剪贴板获取图片
+            else:
+                image_keywords = ["图片", "图", "识别", "ocr", "看下", "分析", "image", "pic", "这张"]
+                has_image_keyword = any(k in inputOfUser for k in image_keywords)
+                
+                # 如果输入为空，或者是包含关键词的短语，尝试检查剪贴板
+                if (has_image_keyword and len(inputOfUser) < 20) or not inputOfUser.strip():
+                    img_path = save_clipboard_image()
+                    if img_path:
+                        if not inputOfUser.strip():
+                            inputOfUser = f"请识别并分析这张图片: {img_path}"
+                        else:
+                            inputOfUser += f" (图片已自动保存: {img_path})"
+                        print(f"{Fore.GREEN}[系统] 已检测并保存剪贴板图片: {img_path}{Style.RESET_ALL}")
+
             raw_cmd = inputOfUser.strip()
             if not raw_cmd:
                 continue
