@@ -9,8 +9,8 @@ Linux版本/
 node_modules/
 dist/
 build/
-
-logs/
+.trae/
+logs/   
 
 *.exe
 *.dll
@@ -18,7 +18,7 @@ logs/
 *.pdb
 *.ilk
 *.lib
-*.trae
+
 
 .DS_Store
 Thumbs.db

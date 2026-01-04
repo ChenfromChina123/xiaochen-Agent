@@ -36,7 +36,34 @@ def format_tool_display(task: Dict[str, Any]) -> str:
         delete_end = task.get("delete_end")
         insert_at = task.get("insert_at")
         return f"✏️  编辑: {path} (删除 {delete_start}-{delete_end}, 插入于 {insert_at})"
+
+    elif task_type == "indent_lines":
+        path = task.get("path", "")
+        start = task.get("start_line")
+        end = task.get("end_line")
+        spaces = task.get("spaces", 4)
+        return f"➡️  缩进: {path} (行 {start}-{end}, 空格 {spaces})"
+
+    elif task_type == "dedent_lines":
+        path = task.get("path", "")
+        start = task.get("start_line")
+        end = task.get("end_line")
+        spaces = task.get("spaces", 4)
+        return f"⬅️  减少缩进: {path} (行 {start}-{end}, 空格 {spaces})"
     
+    elif task_type == "copy_lines":
+        path = task.get("path", "")
+        start = task.get("start_line")
+        end = task.get("end_line")
+        reg = task.get("register", "default")
+        return f"📋 复制: {path} (行 {start}-{end}) -> 寄存器 '{reg}'"
+
+    elif task_type == "paste_lines":
+        path = task.get("path", "")
+        insert_at = task.get("insert_at")
+        reg = task.get("register", "default")
+        return f"📌 粘贴: 寄存器 '{reg}' -> {path} (行 {insert_at})"
+
     elif task_type == "replace_in_file":
         path = task.get("path", "")
         count = task.get("count", 1)

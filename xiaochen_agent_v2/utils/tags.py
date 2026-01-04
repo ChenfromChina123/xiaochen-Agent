@@ -78,7 +78,13 @@ def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
         "search_files",
         "search_in_files",
         "edit_lines",
+        "indent_lines",
+        "dedent_lines",
+        "copy_lines",
+        "paste_lines",
         "replace_in_file",
+        "web_search",
+        "visit_page",
         "task_add",
         "task_update",
         "task_delete",
@@ -201,6 +207,74 @@ def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
             if task["delete_start"] is None and task["insert_at"] is None and not task["content"]:
                 idx = e_idx + len(end_tag)
                 continue
+        elif next_tag in {"indent_lines", "dedent_lines"}:
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "start_line") or _has_unclosed_subtag(inner, "end_line") or _has_unclosed_subtag(inner, "spaces"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            start_line_str = find_substring(inner, "start_line")
+            end_line_str = find_substring(inner, "end_line")
+            spaces_str = find_substring(inner, "spaces")
+            if not task["path"] or not start_line_str.strip() or not end_line_str.strip():
+                idx = e_idx + len(end_tag)
+                continue
+            try:
+                task["start_line"] = int(start_line_str)
+                task["end_line"] = int(end_line_str)
+            except Exception:
+                idx = e_idx + len(end_tag)
+                continue
+            if task["start_line"] < 1 or task["end_line"] < task["start_line"]:
+                idx = e_idx + len(end_tag)
+                continue
+            if spaces_str.strip():
+                try:
+                    task["spaces"] = int(spaces_str)
+                except Exception:
+                    idx = e_idx + len(end_tag)
+                    continue
+            else:
+                task["spaces"] = 4
+            if int(task["spaces"]) <= 0:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "copy_lines":
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "start_line") or _has_unclosed_subtag(inner, "end_line") or _has_unclosed_subtag(inner, "register"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            start_line_str = find_substring(inner, "start_line")
+            end_line_str = find_substring(inner, "end_line")
+            task["register"] = find_substring(inner, "register").strip() or "default"
+            if not task["path"] or not start_line_str.strip() or not end_line_str.strip():
+                idx = e_idx + len(end_tag)
+                continue
+            try:
+                task["start_line"] = int(start_line_str)
+                task["end_line"] = int(end_line_str)
+            except Exception:
+                idx = e_idx + len(end_tag)
+                continue
+            if task["start_line"] < 1 or task["end_line"] < task["start_line"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "paste_lines":
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "insert_at") or _has_unclosed_subtag(inner, "register") or _has_unclosed_subtag(inner, "auto_indent"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            insert_at_str = find_substring(inner, "insert_at")
+            task["register"] = find_substring(inner, "register").strip() or "default"
+            auto_indent_str = find_substring(inner, "auto_indent")
+            task["auto_indent"] = auto_indent_str.strip().lower() in {"1", "true", "yes", "y", "on"}
+            if not task["path"] or not insert_at_str.strip():
+                idx = e_idx + len(end_tag)
+                continue
+            try:
+                task["insert_at"] = int(insert_at_str)
+            except Exception:
+                idx = e_idx + len(end_tag)
+                continue
         elif next_tag == "replace_in_file":
             if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "search") or _has_unclosed_subtag(inner, "replace") or _has_unclosed_subtag(inner, "count") or _has_unclosed_subtag(inner, "regex") or _has_unclosed_subtag(inner, "auto_indent"):
                 idx = e_idx + len(end_tag)
@@ -261,6 +335,25 @@ def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
                 idx = e_idx + len(end_tag)
                 continue
             if not task["content"] and not task["status"] and task["progress"] is None:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "web_search":
+            if _has_unclosed_subtag(inner, "query") or _has_unclosed_subtag(inner, "engine") or _has_unclosed_subtag(inner, "max_results"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["query"] = find_substring(inner, "query")
+            task["engine"] = find_substring(inner, "engine") or "bing"
+            max_results_str = find_substring(inner, "max_results")
+            task["max_results"] = int(max_results_str) if max_results_str.strip().isdigit() else 5
+            if not task["query"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "visit_page":
+            if _has_unclosed_subtag(inner, "url"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["url"] = find_substring(inner, "url")
+            if not task["url"]:
                 idx = e_idx + len(end_tag)
                 continue
         elif next_tag == "task_delete":

@@ -4,6 +4,7 @@ import unittest
 import json
 
 from xiaochen_agent_v2.utils.files import edit_lines, read_lines_robust, read_range_numbered
+from xiaochen_agent_v2.utils.files import indent_lines_range, dedent_lines_range, read_lines_range_raw
 from xiaochen_agent_v2.utils.tags import parse_stack_of_tags
 from xiaochen_agent_v2.core.session import SessionManager
 
@@ -103,6 +104,70 @@ class TestEditLinesAlignment(unittest.TestCase):
             self.assertEqual(lines.count("# -*- coding: utf-8 -*-"), 1)
 
 
+class TestIndentDedentLines(unittest.TestCase):
+    """覆盖选中行范围的缩进与减少缩进（空格单位）。"""
+
+    def test_indent_lines_range_indents_only_non_empty_lines(self) -> None:
+        """缩进应对非空行增加指定空格数，空行保持不变。"""
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "demo.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("a\n  b\n\nc\n")
+            _before, after = indent_lines_range(path, 1, 4, spaces=2)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(after)
+            self.assertEqual(read_lines_robust(path), ["  a", "    b", "", "  c"])
+
+    def test_dedent_lines_range_removes_spaces_only(self) -> None:
+        """减少缩进仅移除行首空格，不应影响以 tab 开头的行。"""
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "demo.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("    a\n  b\n\tc\n\n")
+            _before, after = dedent_lines_range(path, 1, 4, spaces=2)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(after)
+            self.assertEqual(read_lines_robust(path), ["  a", "b", "\tc"])
+
+
+class TestCopyPaste(unittest.TestCase):
+    """测试跨文件复制粘贴的基础函数与标签解析。"""
+
+    def test_read_lines_range_raw_returns_content_without_truncation(self) -> None:
+        """测试 read_lines_range_raw 能完整读取内容，不含截断标识。"""
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "large.txt")
+            # 构造超过 DEFAULT_MAX_READ_CHARS 的内容
+            large_content = "A" * 21000
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(large_content)
+            
+            # 读取全部
+            content = read_lines_range_raw(path, 1, 1)
+            self.assertEqual(len(content), 21000)
+            self.assertFalse("... (truncated)" in content)
+
+    def test_copy_lines_tag_parsing(self) -> None:
+        text = "<copy_lines><path>a.py</path><start_line>1</start_line><end_line>10</end_line><register>reg1</register></copy_lines>"
+        tasks = parse_stack_of_tags(text)
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["type"], "copy_lines")
+        self.assertEqual(tasks[0]["path"], "a.py")
+        self.assertEqual(tasks[0]["start_line"], 1)
+        self.assertEqual(tasks[0]["end_line"], 10)
+        self.assertEqual(tasks[0]["register"], "reg1")
+
+    def test_paste_lines_tag_parsing(self) -> None:
+        text = "<paste_lines><path>b.py</path><insert_at>5</insert_at><register>reg1</register><auto_indent>true</auto_indent></paste_lines>"
+        tasks = parse_stack_of_tags(text)
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["type"], "paste_lines")
+        self.assertEqual(tasks[0]["path"], "b.py")
+        self.assertEqual(tasks[0]["insert_at"], 5)
+        self.assertEqual(tasks[0]["register"], "reg1")
+        self.assertTrue(tasks[0]["auto_indent"])
+
+
 class TestTaskTagParsing(unittest.TestCase):
     """覆盖 task_add/task_update 的解析兼容性。"""
 
@@ -137,6 +202,30 @@ class TestTaskTagParsing(unittest.TestCase):
         self.assertEqual(tasks[0]["path"], "a.py")
         self.assertEqual(tasks[0]["start_line"], 10)
         self.assertEqual(tasks[0]["end_line"], 20)
+
+    def test_indent_lines_parses_required_fields(self) -> None:
+        text = (
+            "<indent_lines>"
+            "<path>a.py</path>"
+            "<start_line>1</start_line>"
+            "<end_line>3</end_line>"
+            "<spaces>2</spaces>"
+            "</indent_lines>"
+        )
+        tasks = parse_stack_of_tags(text)
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["type"], "indent_lines")
+        self.assertEqual(tasks[0]["path"], "a.py")
+        self.assertEqual(tasks[0]["start_line"], 1)
+        self.assertEqual(tasks[0]["end_line"], 3)
+        self.assertEqual(tasks[0]["spaces"], 2)
+
+    def test_dedent_lines_defaults_spaces_to_4(self) -> None:
+        text = "<dedent_lines><path>a.py</path><start_line>2</start_line><end_line>2</end_line></dedent_lines>"
+        tasks = parse_stack_of_tags(text)
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["type"], "dedent_lines")
+        self.assertEqual(tasks[0]["spaces"], 4)
 
     def test_replace_in_file_parses_basic_fields(self) -> None:
         text = (

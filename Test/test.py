@@ -4,14 +4,28 @@
 精美爱心绘制程序
 使用多种库函数创建精美的爱心图案
 包含颜色、动画、随机效果等
+
+新增功能：支持命令行参数选择爱心类型
+用法：python test.py [heart_type]
+可选类型：beautiful, ascii, flower, modern, minimalist, all
 """
 
+import argparse
+import sys
+import os
+import io
 import math
 import time
 import random
-import sys
-import os
 from datetime import datetime
+
+# 设置控制台编码为UTF-8
+if sys.platform == 'win32':
+    # 设置标准输出流的编码为UTF-8
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    # 设置控制台代码页为UTF-8
+    os.system('chcp 65001 > nul')
 
 # 尝试导入colorama库用于彩色输出
 try:
@@ -21,8 +35,6 @@ try:
 except ImportError:
     COLORAMA_AVAILABLE = False
     print("提示: 安装colorama库可获得更好的彩色效果: pip install colorama")
-
-
 def print_color(text, color="", bg_color="", style=""):
     """
     彩色打印函数
@@ -303,9 +315,23 @@ def show_progress_animation():
 def main():
     """
     主函数：运行精美爱心绘制程序
+    支持命令行参数选择爱心类型
     """
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description='Beautiful Heart Drawing Program')
+    parser.add_argument('heart_type', nargs='?', default='all',
+                       choices=['beautiful', 'ascii', 'flower', 'modern', 'minimalist', 'all'],
+                       help='Heart type: beautiful, ascii, flower, modern, minimalist, all (default: all)')
+    parser.add_argument('--size', type=int, default=18,
+                       help='Heart size (only effective for some types)')
+    parser.add_argument('--no-clear', action='store_true',
+                       help='Do not clear screen')
+
+    args = parser.parse_args()
+
     # 显示程序标题
-    os.system('cls' if os.name == 'nt' else 'clear')
+    if not args.no_clear:
+        os.system('cls' if os.name == 'nt' else 'clear')
 
     print_color("=" * 60, "cyan", style="bright")
     print_color("            🎀 精美爱心绘制程序 🎀", "magenta", style="bright")
@@ -313,6 +339,7 @@ def main():
 
     print_color(f"当前时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "yellow")
     print_color(f"系统平台: {sys.platform}", "yellow")
+    print_color(f"选择的爱心类型: {args.heart_type}", "yellow")
 
     if not COLORAMA_AVAILABLE:
         print_color("提示: 安装colorama库可获得彩色效果: pip install colorama", "yellow")
@@ -320,21 +347,29 @@ def main():
     # 显示加载动画
     show_progress_animation()
 
-    # 绘制各种精美的爱心
-    time.sleep(0.5)
-    draw_beautiful_heart(size=18)
-    time.sleep(1)
+    # 根据参数绘制爱心
+    heart_type = args.heart_type
 
-    draw_ascii_heart(size=14)
-    time.sleep(1)
+    if heart_type in ['beautiful', 'all']:
+        time.sleep(0.5)
+        draw_beautiful_heart(size=args.size)
+        time.sleep(1)
 
-    draw_flower_heart(size=10)
-    time.sleep(1)
+    if heart_type in ['ascii', 'all']:
+        draw_ascii_heart(size=min(args.size, 15))
+        time.sleep(1)
 
-    draw_modern_heart()
-    time.sleep(1)
+    if heart_type in ['flower', 'all']:
+        draw_flower_heart(size=min(args.size, 12))
+        time.sleep(1)
 
-    draw_minimalist_heart()
+    if heart_type in ['modern', 'all']:
+        draw_modern_heart()
+        time.sleep(1)
+
+    if heart_type in ['minimalist', 'all']:
+        draw_minimalist_heart()
+        time.sleep(1)
 
     # 显示结束信息
     print_color("\n" + "=" * 60, "green", style="bright")

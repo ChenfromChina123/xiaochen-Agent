@@ -147,6 +147,22 @@ def read_range(path_of_file: str, start_line: int = 1, end_line: Optional[int] =
     return total_lines, actual_end, content
 
 
+def read_lines_range_raw(path_of_file: str, start_line: int, end_line: int) -> str:
+    """
+    读取文件指定范围的内容，不进行截断。用于复制功能。
+    """
+    lines_all = read_lines_robust(path_of_file)
+    # 转换为 0-based 索引，并处理越界
+    start_idx = max(0, start_line - 1)
+    end_idx = min(len(lines_all), end_line)
+    
+    if start_idx >= len(lines_all):
+        return ""
+        
+    lines_target = lines_all[start_idx:end_idx]
+    return "\n".join(lines_target)
+
+
 def read_range_numbered(
     path_of_file: str,
     start_line: int = 1,
@@ -357,6 +373,105 @@ def edit_lines(
                 tail = lines[inserted_len:]
                 if tail and (tail[0].startswith("#!") or "coding" in tail[0] or tail[0].strip() in {'"""', "'''"}):
                     lines = lines[:inserted_len] + _strip_python_module_header(tail)
+
+    after = "\n".join(lines)
+    return before, after
+
+
+def indent_lines_range(
+    path_of_file: str,
+    start_line: int,
+    end_line: int,
+    *,
+    spaces: int = 4,
+) -> Tuple[str, str]:
+    """
+    对指定行区间批量增加缩进（以空格为单位）。
+
+    Args:
+        path_of_file: 文件路径
+        start_line: 起始行号（从 1 开始）
+        end_line: 结束行号（从 1 开始，且 >= start_line）
+        spaces: 每行缩进增加的空格数
+
+    Returns:
+        (before_content, after_content)
+    """
+    spaces = int(spaces)
+
+    if os.path.exists(path_of_file):
+        lines = read_lines_robust(path_of_file)
+    else:
+        lines = []
+
+    before = "\n".join(lines)
+    if spaces <= 0:
+        return before, before
+    if not lines:
+        return before, before
+
+    total = len(lines)
+    s = max(1, int(start_line))
+    e = max(s, int(end_line))
+    s = min(s, total)
+    e = min(e, total)
+
+    prefix = " " * spaces
+    for i in range(s - 1, e):
+        if lines[i].strip() == "":
+            continue
+        lines[i] = prefix + lines[i]
+
+    after = "\n".join(lines)
+    return before, after
+
+
+def dedent_lines_range(
+    path_of_file: str,
+    start_line: int,
+    end_line: int,
+    *,
+    spaces: int = 4,
+) -> Tuple[str, str]:
+    """
+    对指定行区间批量减少缩进（以空格为单位，仅移除行首空格）。
+
+    Args:
+        path_of_file: 文件路径
+        start_line: 起始行号（从 1 开始）
+        end_line: 结束行号（从 1 开始，且 >= start_line）
+        spaces: 每行最多减少的空格数
+
+    Returns:
+        (before_content, after_content)
+    """
+    spaces = int(spaces)
+
+    if os.path.exists(path_of_file):
+        lines = read_lines_robust(path_of_file)
+    else:
+        lines = []
+
+    before = "\n".join(lines)
+    if spaces <= 0:
+        return before, before
+    if not lines:
+        return before, before
+
+    total = len(lines)
+    s = max(1, int(start_line))
+    e = max(s, int(end_line))
+    s = min(s, total)
+    e = min(e, total)
+
+    width = spaces
+    for i in range(s - 1, e):
+        if lines[i].strip() == "":
+            continue
+        leading_spaces = len(lines[i]) - len(lines[i].lstrip(" "))
+        cut = min(width, leading_spaces)
+        if cut > 0:
+            lines[i] = lines[i][cut:]
 
     after = "\n".join(lines)
     return before, after
