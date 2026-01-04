@@ -460,8 +460,13 @@ def run_cli() -> None:
             title = buff.value.lower()
             
             # 常见的终端关键词
-            terminal_keywords = ["cmd.exe", "powershell", "windows terminal", "conhost", "agent.bat", "xiaochen", "terminal"]
-            return any(k in title for k in terminal_keywords)
+            terminal_keywords = [
+                "cmd.exe", "powershell", "windows terminal", "conhost", 
+                "agent.bat", "xiaochen", "terminal", "trae", "code", "visual studio"
+            ]
+            is_active = any(k in title for k in terminal_keywords)
+            # print(f"[DEBUG] Window Title: {title}, Is Active: {is_active}") # 调试用
+            return is_active
         except:
             return True # 出错则默认允许，保证可用性
 
@@ -470,26 +475,32 @@ def run_cli() -> None:
         nonlocal pending_pastes, just_pasted
         
         # 核心修改：仅在终端窗口激活时处理
-        if not is_terminal_active():
-            return
+        try:
+            if not is_terminal_active():
+                return
+        except:
+            pass # 确保报错不影响流程
             
         paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
-        img_path = save_clipboard_file(save_dir=paste_dir)
-        if img_path:
-            pending_pastes.append(img_path)
-            just_pasted = True
-            # 自动清理旧文件
-            prune_directory(paste_dir, 50)
-            # 模拟按下回车，强制结束当前的 input() 阻塞，以便主循环刷新显示
-            keyboard.press_and_release('enter')
-        else:
-            # 如果不是图片或支持的文件，不做任何处理，让系统原生的 Ctrl+V 处理文本粘贴
+        try:
+            img_path = save_clipboard_file(save_dir=paste_dir)
+            if img_path:
+                pending_pastes.append(img_path)
+                just_pasted = True
+                # 自动清理旧文件
+                prune_directory(paste_dir, 50)
+                # 模拟按下回车，强制结束当前的 input() 阻塞，以便主循环刷新显示
+                keyboard.press_and_release('enter')
+        except Exception as e:
+            # print(f"[DEBUG] 快捷键处理异常: {e}")
             pass
 
     # 注册全局热键监听 (仅在 Windows 下有效且需要管理员权限)
     try:
-        keyboard.add_hotkey('ctrl+v', handle_clipboard_shortcut)
-    except:
+        # 使用 suppress=False 允许事件继续传递给系统，这样正常的文本粘贴不受影响
+        keyboard.add_hotkey('ctrl+v', handle_clipboard_shortcut, suppress=False)
+    except Exception as e:
+        # print(f"[DEBUG] 热键注册失败: {e}")
         pass
 
     while True:
