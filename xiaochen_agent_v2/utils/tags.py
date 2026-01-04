@@ -90,6 +90,8 @@ def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
         "task_delete",
         "task_list",
         "task_clear",
+        "ocr_image",
+        "ocr_document",
     ]
     idx = 0
 
@@ -368,6 +370,24 @@ def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
             pass
         elif next_tag == "task_clear":
             pass
+        elif next_tag == "ocr_image":
+            if _has_unclosed_subtag(inner, "path"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            if not task["path"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "ocr_document":
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "page_start") or _has_unclosed_subtag(inner, "page_end"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            task["page_start"] = find_substring(inner, "page_start")
+            task["page_end"] = find_substring(inner, "page_end")
+            if not task["path"]:
+                idx = e_idx + len(end_tag)
+                continue
 
         tasks.append(task)
         idx = e_idx + len(end_tag)

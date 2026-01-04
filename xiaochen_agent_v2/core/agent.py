@@ -370,6 +370,13 @@ class Agent:
   - max_results: 返回结果数量（1-10，默认3，建议保持较小以节省token）
   <visit_page><url>...</url></visit_page>
   - url: 访问的网页链接，返回网页正文内容
+- OCR 识别:
+  <ocr_image><path>...</path></ocr_image>
+  - path: 图片文件的绝对路径
+  <ocr_document><path>...</path><page_start>1</page_start><page_end>5</page_end></ocr_document>
+  - path: 文档文件（如 PDF）的绝对路径
+  - page_start: 起始页码（可选，默认为1）
+  - page_end: 结束页码（可选，默认为到最后）
 - Task list:
   <task_add><content>...</content><status>pending</status></task_add>
   <task_update><id>T1</id><status>in_progress</status></task_update>
@@ -996,6 +1003,10 @@ class Agent:
                         obs = self.tools.web_search(t)
                     elif t["type"] == "visit_page":
                         obs = self.tools.visit_page(t)
+                    elif t["type"] == "ocr_image":
+                        obs = self.tools.ocr_image(t)
+                    elif t["type"] == "ocr_document":
+                        obs = self.tools.ocr_document(t)
                     elif t["type"] == "task_add":
                         obs = self.tools.task_add(t)
                     elif t["type"] == "task_update":

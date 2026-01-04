@@ -25,6 +25,7 @@ from ..utils.files import (
 from ..utils.display import print_tool_execution_header
 from ..utils.logs import append_edit_history
 from ..utils.web_search import web_search, visit_page, format_search_results
+from ..utils.ocr import ocr_image, ocr_document
 from .utils import validate_python_file
 
 class Tools:
@@ -613,3 +614,34 @@ class Tools:
     def task_list(self, t: Dict[str, Any]) -> str:
         self.agent.printTaskProgress()
         return "SUCCESS: Task list\n" + self.agent.taskManager.render()
+
+    def ocr_image(self, t: Dict[str, Any]) -> str:
+        path = os.path.abspath(t["path"])
+        try:
+            print_tool_execution_header("OCR Image", {"path": path})
+            result = ocr_image(path)
+            if result.get("code") == 100:
+                text = result.get("text", "")
+                return f"SUCCESS: OCR completed\n\n{text}"
+            else:
+                return f"FAILURE: OCR failed (code: {result.get('code')})\nError: {result.get('data')}"
+        except Exception as e:
+            return f"FAILURE: {str(e)}"
+
+    def ocr_document(self, t: Dict[str, Any]) -> str:
+        path = os.path.abspath(t["path"])
+        page_start = int(t.get("page_start") or 1)
+        page_end = t.get("page_end")
+        if page_end:
+            page_end = int(page_end)
+            
+        try:
+            print_tool_execution_header("OCR Document", {"path": path, "page_start": page_start, "page_end": page_end})
+            result = ocr_document(path, page_start=page_start, page_end=page_end)
+            if result.get("code") == 100:
+                text = result.get("text", "")
+                return f"SUCCESS: Document OCR completed\n\n{text}"
+            else:
+                return f"FAILURE: Document OCR failed (code: {result.get('code')})\nError: {result.get('data')}"
+        except Exception as e:
+            return f"FAILURE: {str(e)}"
