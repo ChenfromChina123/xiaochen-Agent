@@ -436,9 +436,43 @@ def run_cli() -> None:
     pending_pastes = []  # 存储当前待处理的粘贴文件路径
     just_pasted = False  # 标记是否刚刚发生了粘贴操作，用于刷新输入行
 
+    def is_terminal_active() -> bool:
+        """
+        检查当前终端窗口是否处于激活状态，避免全局捕捉 Ctrl+V。
+        仅在 Windows 下通过窗口标题简单判断。
+        """
+        if sys.platform != "win32":
+            return True # 非 Windows 暂不限制
+            
+        try:
+            import ctypes
+            from ctypes import wintypes
+            
+            # 获取当前激活窗口的句柄
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            if not hwnd:
+                return False
+                
+            # 获取窗口标题
+            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+            buff = ctypes.create_unicode_buffer(length + 1)
+            ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
+            title = buff.value.lower()
+            
+            # 常见的终端关键词
+            terminal_keywords = ["cmd.exe", "powershell", "windows terminal", "conhost", "agent.bat", "xiaochen", "terminal"]
+            return any(k in title for k in terminal_keywords)
+        except:
+            return True # 出错则默认允许，保证可用性
+
     def handle_clipboard_shortcut():
         """监听 Ctrl+V 快捷键，实时处理图片/文档"""
         nonlocal pending_pastes, just_pasted
+        
+        # 核心修改：仅在终端窗口激活时处理
+        if not is_terminal_active():
+            return
+            
         paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
         img_path = save_clipboard_file(save_dir=paste_dir)
         if img_path:
@@ -474,6 +508,8 @@ def run_cli() -> None:
                 if pending_pastes:
                     last_path = pending_pastes[-1]
                     filename = os.path.basename(last_path)
+                    # 清除当前行（即自动回车产生的新行），保持界面整洁
+                    print("\033[F\033[K", end="") # 回到上一行并清除内容
                     print(f"{Fore.GREEN}[已粘贴] {filename} (当前共 {len(pending_pastes)} 个文件){Style.RESET_ALL}")
                     print(f"{Fore.CYAN}[提示] 继续粘贴图片，或直接按【回车】发送分析，输入 'cancel' 撤回。{Style.RESET_ALL}")
                 

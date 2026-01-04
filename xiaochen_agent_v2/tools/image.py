@@ -54,6 +54,26 @@ def save_clipboard_file(save_dir="attachments"):
             supported_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.pdf', '.docx', '.txt', '.md', '.xlsx', '.csv')
             for item in img_or_files:
                 if isinstance(item, str) and item.lower().endswith(supported_exts):
+                    # 如果文件不在 save_dir 中，则复制过去以便统一管理
+                    if not os.path.exists(save_dir):
+                        os.makedirs(save_dir)
+                    
+                    filename = os.path.basename(item)
+                    dest_path = os.path.join(save_dir, filename)
+                    
+                    # 如果目标位置已有同名文件且不是同一个文件，则加时间戳
+                    if os.path.exists(dest_path) and os.path.abspath(dest_path) != os.path.abspath(item):
+                        timestamp = datetime.datetime.now().strftime("%H%M%S")
+                        name, ext = os.path.splitext(filename)
+                        filename = f"{name}_{timestamp}{ext}"
+                        dest_path = os.path.join(save_dir, filename)
+                    
+                    # 只有在路径不同时才复制
+                    if os.path.abspath(dest_path) != os.path.abspath(item):
+                        import shutil
+                        shutil.copy2(item, dest_path)
+                        return os.path.abspath(dest_path)
+                    
                     return os.path.abspath(item)
         
         # 2. 如果是位图数据 (截图)
