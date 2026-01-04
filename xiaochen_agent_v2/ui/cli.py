@@ -437,10 +437,10 @@ def run_cli() -> None:
     just_pasted = False  # 标记是否刚刚发生了粘贴操作，用于刷新输入行
 
     def handle_clipboard_shortcut():
-        """监听 Ctrl+V 快捷键，实时处理图片"""
+        """监听 Ctrl+V 快捷键，实时处理图片/文档"""
         nonlocal pending_pastes, just_pasted
         paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
-        img_path = save_clipboard_image(save_dir=paste_dir)
+        img_path = save_clipboard_file(save_dir=paste_dir)
         if img_path:
             pending_pastes.append(img_path)
             just_pasted = True
@@ -449,7 +449,7 @@ def run_cli() -> None:
             # 模拟按下回车，强制结束当前的 input() 阻塞，以便主循环刷新显示
             keyboard.press_and_release('enter')
         else:
-            # 如果不是图片，不做任何处理，让系统原生的 Ctrl+V 处理文本粘贴
+            # 如果不是图片或支持的文件，不做任何处理，让系统原生的 Ctrl+V 处理文本粘贴
             pass
 
     # 注册全局热键监听 (仅在 Windows 下有效且需要管理员权限)
@@ -490,16 +490,16 @@ def run_cli() -> None:
                     # 如果有待处理的粘贴，则整合发送
                     paths_str = "\n".join([f"- {p}" for p in pending_pastes])
                     inputOfUser = f"请识别并分析以下图片/文档：\n{paths_str}"
-                    print(f"{Fore.GREEN}[系统] 正在分析 {len(pending_pastes)} 张图片...{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}[系统] 正在准备发送 {len(pending_pastes)} 个文件...{Style.RESET_ALL}")
                     pending_pastes = [] # 发送后清空
                 else:
-                    # 尝试获取图片 (优先图片，因为 PIL 抓取图片很准确)
+                    # 尝试获取图片/文件 (优先文件，因为 PIL 抓取图片很准确)
                     paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
                     print(f"{Fore.YELLOW}[系统] 正在检查剪贴板内容...{Style.RESET_ALL}", end="\r")
-                    img_path = save_clipboard_image(save_dir=paste_dir)
+                    img_path = save_clipboard_file(save_dir=paste_dir)
                     if img_path:
-                        inputOfUser = f"请识别并分析这张图片/文档: {img_path}"
-                        print(f"{Fore.GREEN}[系统] 已从剪贴板保存并加载图片: {img_path}{Style.RESET_ALL}")
+                        inputOfUser = f"请识别并分析这个图片/文档: {img_path}"
+                        print(f"{Fore.GREEN}[系统] 已从剪贴板加载文件: {img_path}{Style.RESET_ALL}")
                         # 自动清理旧文件
                         prune_directory(paste_dir, 50)
                     else:
@@ -525,15 +525,15 @@ def run_cli() -> None:
                 inputOfUser = f"请识别并分析这张图片/文档: {img_path}"
                 print(f"{Fore.GREEN}[系统] 已检测到粘贴的文件路径: {img_path}{Style.RESET_ALL}")
             
-            # 3. 如果是普通文本但包含图片关键词，再次检查剪贴板图片 (兼容旧逻辑)
+            # 3. 如果是普通文本但包含图片/文档关键词，再次检查剪贴板内容 (兼容旧逻辑)
             else:
-                image_keywords = ["图片", "图", "识别", "ocr", "看下", "分析", "image", "pic", "这张"]
-                if any(k in inputOfUser.lower() for k in image_keywords) and len(inputOfUser) < 20:
+                doc_keywords = ["图片", "图", "识别", "ocr", "看下", "分析", "image", "pic", "这张", "pdf", "文档", "文件"]
+                if any(k in inputOfUser.lower() for k in doc_keywords) and len(inputOfUser) < 20:
                     paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
-                    img_path = save_clipboard_image(save_dir=paste_dir)
+                    img_path = save_clipboard_file(save_dir=paste_dir)
                     if img_path:
-                        inputOfUser += f" (图片已自动保存: {img_path})"
-                        print(f"{Fore.GREEN}[系统] 已检测并保存剪贴板图片: {img_path}{Style.RESET_ALL}")
+                        inputOfUser += f" (文件已自动关联: {img_path})"
+                        print(f"{Fore.GREEN}[系统] 已检测并关联剪贴板内容: {img_path}{Style.RESET_ALL}")
                         # 自动清理旧文件
                         prune_directory(paste_dir, 50)
 

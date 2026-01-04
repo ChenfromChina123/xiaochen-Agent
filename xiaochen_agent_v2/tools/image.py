@@ -35,6 +35,57 @@ def get_clipboard_text():
         print(f"[DEBUG] 获取剪贴板文本失败: {e}")
         return None
 
+def save_clipboard_file(save_dir="attachments"):
+    """
+    从剪贴板获取文件或图片并保存
+    支持：
+    1. 直接从文件管理器复制的文件 (PDF, Docx, 图片等)
+    2. 截图/位图数据
+    
+    返回:
+        成功返回保存的绝对路径，失败返回 None
+    """
+    try:
+        # 1. 优先检查是否是文件列表 (HDROP)
+        img_or_files = ImageGrab.grabclipboard()
+        
+        if isinstance(img_or_files, list):
+            # 如果是文件列表，返回第一个支持的文件路径
+            supported_exts = ('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.pdf', '.docx', '.txt', '.md', '.xlsx', '.csv')
+            for item in img_or_files:
+                if isinstance(item, str) and item.lower().endswith(supported_exts):
+                    return os.path.abspath(item)
+        
+        # 2. 如果是位图数据 (截图)
+        if isinstance(img_or_files, Image.Image):
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"img_{timestamp}.png"
+            save_path = os.path.abspath(os.path.join(save_dir, filename))
+            img_or_files.save(save_path, "PNG")
+            return save_path
+
+        # 3. 备选方案：使用 PowerShell 检查位图 (Pillow 有时抓不到)
+        try:
+            temp_img = os.path.join(save_dir, f"temp_clip_{datetime.datetime.now().strftime('%H%M%S')}.png")
+            save_cmd = [
+                'powershell', '-NoProfile', '-Command', 
+                f'$img = Get-Clipboard -Format Image; if ($img) {{ $img.Save("{temp_img}", [System.Drawing.Imaging.ImageFormat]::Png); echo "SUCCESS" }}'
+            ]
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            res = subprocess.run(save_cmd, capture_output=True, text=True)
+            if "SUCCESS" in res.stdout and os.path.exists(temp_img):
+                return os.path.abspath(temp_img)
+        except:
+            pass
+            
+        return None
+    except Exception as e:
+        print(f"[DEBUG] 从剪贴板获取内容失败: {e}")
+        return None
+
 def save_clipboard_image(save_dir="attachments"):
     """
     从剪贴板获取图片并保存到指定目录
