@@ -434,19 +434,20 @@ def run_cli() -> None:
             pass
 
     pending_pastes = []  # 存储当前待处理的粘贴文件路径
+    just_pasted = False  # 标记是否刚刚发生了粘贴操作，用于刷新输入行
 
     def handle_clipboard_shortcut():
         """监听 Ctrl+V 快捷键，实时处理图片"""
-        nonlocal pending_pastes
+        nonlocal pending_pastes, just_pasted
         paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
         img_path = save_clipboard_image(save_dir=paste_dir)
         if img_path:
             pending_pastes.append(img_path)
-            filename = os.path.basename(img_path)
-            print(f"\n{Fore.GREEN}[已粘贴] {filename} (当前共 {len(pending_pastes)} 个文件){Style.RESET_ALL}")
-            print(f"{Fore.CYAN}[提示] 继续粘贴图片，或直接按【回车】发送分析，输入 'cancel' 撤回。{Style.RESET_ALL}")
+            just_pasted = True
             # 自动清理旧文件
             prune_directory(paste_dir, 50)
+            # 模拟按下回车，强制结束当前的 input() 阻塞，以便主循环刷新显示
+            keyboard.press_and_release('enter')
         else:
             # 如果不是图片，不做任何处理，让系统原生的 Ctrl+V 处理文本粘贴
             pass
@@ -466,6 +467,20 @@ def run_cli() -> None:
             current_dir = os.getcwd()
             prompt = f"\n{Fore.BLUE}{current_dir}{Style.RESET_ALL}\n{Style.BRIGHT}User: "
             inputOfUser = _normalize_user_input(input(prompt))
+            
+            # 3a. 如果是由于粘贴操作触发的自动回车，则刷新显示并恢复之前的输入内容
+            if just_pasted:
+                just_pasted = False
+                if pending_pastes:
+                    last_path = pending_pastes[-1]
+                    filename = os.path.basename(last_path)
+                    print(f"{Fore.GREEN}[已粘贴] {filename} (当前共 {len(pending_pastes)} 个文件){Style.RESET_ALL}")
+                    print(f"{Fore.CYAN}[提示] 继续粘贴图片，或直接按【回车】发送分析，输入 'cancel' 撤回。{Style.RESET_ALL}")
+                
+                # 如果用户之前正在输入内容，通过模拟键盘输入将其写回终端，方便用户继续输入
+                if inputOfUser:
+                    keyboard.write(inputOfUser)
+                continue
             
             # 优化内容处理流程 (支持直接粘贴路径、剪贴板图片、剪贴板多行文本)
             
