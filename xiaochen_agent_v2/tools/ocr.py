@@ -11,7 +11,7 @@ import datetime
 import requests
 from typing import Dict, Any, Optional
 
-# OCR 后端服务配置
+# OCR backend_service 配置
 OCR_SERVER_URL = "http://localhost:5000"
 STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "storage", "ocr_results")
 
@@ -37,7 +37,7 @@ def _save_result_locally(file_path: str, result: Dict[str, Any]) -> str:
     返回:
         保存的文件路径
     """
-    # 后端服务返回的格式中，成功标志在 success 字段
+    # backend_service 返回的格式中，成功标志在 success 字段
     if not result.get("success"):
         return ""
     
@@ -49,7 +49,7 @@ def _save_result_locally(file_path: str, result: Dict[str, Any]) -> str:
     txt_filename = f"{file_name_without_ext}_{timestamp}.txt"
     txt_path = os.path.join(STORAGE_DIR, txt_filename)
     
-    # 后端服务返回的数据在 data.text 中（如果请求了 extract_text）
+    # backend_service 返回的数据在 data.text 中（如果请求了 extract_text）
     # 或者在 data.ocr_result.text 中
     data = result.get("data", {})
     text_content = data.get("text", "")
@@ -76,7 +76,7 @@ def _save_result_locally(file_path: str, result: Dict[str, Any]) -> str:
 
 def ocr_image(image_path: str) -> Dict[str, Any]:
     """
-    通过后端服务对图片进行 OCR 识别，并自动保存结果到本地
+    通过 backend_service 对图片进行 OCR 识别，并自动保存结果到本地
     
     参数:
         image_path: 图片文件的绝对路径
@@ -107,13 +107,13 @@ def ocr_image(image_path: str) -> Dict[str, Any]:
         return result
         
     except requests.exceptions.ConnectionError:
-        return {"success": False, "message": "无法连接到 OCR 后端服务，请确保服务已启动。"}
+        return {"success": False, "message": "无法连接到 OCR backend_service，请确保服务已启动。"}
     except Exception as e:
         return {"success": False, "message": f"OCR 识别执行异常: {str(e)}"}
 
 def ocr_document(doc_path: str, page_start: int = 1, page_end: Optional[int] = None) -> Dict[str, Any]:
     """
-    通过后端服务对 PDF 等文档文件进行 OCR 识别，并自动保存结果到本地
+    通过 backend_service 对 PDF 等文档文件进行 OCR 识别，并自动保存结果到本地
     
     参数:
         doc_path: 文档文件的绝对路径
@@ -152,6 +152,6 @@ def ocr_document(doc_path: str, page_start: int = 1, page_end: Optional[int] = N
         return result
         
     except requests.exceptions.ConnectionError:
-        return {"success": False, "message": "无法连接到 OCR 后端服务，请确保服务已启动。"}
+        return {"success": False, "message": "无法连接到 OCR backend_service，请确保服务已启动。"}
     except Exception as e:
         return {"success": False, "message": f"文档 OCR 识别执行异常: {str(e)}"}

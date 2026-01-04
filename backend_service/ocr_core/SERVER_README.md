@@ -1,4 +1,4 @@
-# OCR后端服务 - 快速开始
+# OCR backend_service - 快速开始
 
 ## 🚀 一键启动
 

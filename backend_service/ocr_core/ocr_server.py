@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-OCR后端服务 - Flask RESTful API
+OCR backend_service - Flask RESTful API
 提供HTTP接口调用OCR识别功能
 """
 

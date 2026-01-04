@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 OCR服务客户端调用示例
-演示如何调用OCR后端服务的各种接口
+演示如何调用OCR backend_service 的各种接口
 """
 
 import os

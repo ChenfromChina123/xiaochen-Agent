@@ -16,7 +16,7 @@ from xiaochen_agent_v2.tools.executor import Tools
 
 class TestOCRBackendFull(unittest.TestCase):
     """
-    全面测试 OCR 后端服务集成
+    全面测试 OCR backend_service 集成
     """
     
     @classmethod

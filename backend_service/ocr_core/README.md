@@ -34,7 +34,7 @@
 2. **复制部署**：将整个 `ocr_core` 文件夹复制到任意位置即可
 3. **无外部依赖**：不依赖父项目的任何文件
 4. **跨项目使用**：可以集成到任何 Python 项目中
-5. **后端服务**：可一键启动为HTTP REST API服务
+5. **backend_service**：可一键启动为HTTP REST API服务
 
 ### 部署方式
 
@@ -56,7 +56,7 @@ sys.path.append('/path/to/ocr_core')
 from ocr_engine import OCREngine
 ```
 
-#### 方式2：作为后端服务部署（新增）
+#### 方式2：作为 backend_service 部署（新增）
 
 本模块现已支持作为HTTP REST API服务运行，支持跨语言调用：
 

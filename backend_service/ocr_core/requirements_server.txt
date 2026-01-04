@@ -1,4 +1,4 @@
-# OCR后端服务依赖包
+# OCR backend_service 依赖包
 Flask>=2.3.0
 Flask-CORS>=4.0.0
 Pillow>=9.0.0

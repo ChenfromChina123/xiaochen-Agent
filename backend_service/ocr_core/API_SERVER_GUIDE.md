@@ -1,8 +1,8 @@
-# OCR后端服务API文档
+# OCR backend_service API文档
 
 ## 概述
 
-OCR后端服务提供了基于HTTP的RESTful API接口，可以通过标准的HTTP请求调用OCR识别功能。
+OCR backend_service 提供了基于HTTP的RESTful API接口，可以通过标准的HTTP请求调用OCR识别功能。
 
 - **服务地址**: `http://localhost:5000` (默认)
 - **协议**: HTTP/HTTPS
