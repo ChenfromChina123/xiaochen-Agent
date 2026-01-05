@@ -353,9 +353,18 @@ class OCREngine:
                 return {"code": 906, "data": "未提供有效的图像输入", "score": 0}
 
             # 执行识别
-            # 允许在请求中覆盖 cls 参数
-            use_cls = cmd_dict.get("cls", self.config.get("cls", False))
-            result = self.ocr_instance.ocr(img_input, cls=use_cls)
+            # PaddleOCR 的 ocr 方法在不同版本中对参数支持不同
+            # 由于在初始化时已经设置了 use_angle_cls，这里通常不需要再传 cls 参数
+            try:
+                # 优先尝试带 cls 参数（兼容大多数版本）
+                use_cls = cmd_dict.get("cls", self.config.get("cls", False))
+                result = self.ocr_instance.ocr(img_input, cls=use_cls)
+            except TypeError as e:
+                if "unexpected keyword argument 'cls'" in str(e):
+                    # 如果不支持 cls 参数，则尝试不带参数调用
+                    result = self.ocr_instance.ocr(img_input)
+                else:
+                    raise e
             
             # 转换格式为 PaddleOCR-json 格式
             formatted_data = []
