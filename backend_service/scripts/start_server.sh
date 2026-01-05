@@ -52,6 +52,6 @@ NEW_PID=$!
 
 echo $NEW_PID > ocr_server.pid
 echo "[成功] OCR服务已在后台启动，PID: $NEW_PID"
-echo "[提示] 日志文件: backend_service/scripts/logs/ocr_server.log"
-echo "[提示] 使用 ./stop_server.sh 停止服务"
+echo "[提示] 日志文件: backend_service/logs/ocr_server.log"
+echo "[提示] 使用 ./scripts/stop_server.sh 停止服务"
 

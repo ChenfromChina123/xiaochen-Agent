@@ -12,6 +12,7 @@ from base64 import b64encode, b64decode
 from json import loads as json_loads, dumps as json_dumps
 from sys import platform as sys_platform
 from io import BytesIO
+import io
 from urllib.parse import urlparse
 from urllib.request import urlopen, Request
 
@@ -26,6 +27,9 @@ except ImportError:
 
 try:
     from paddleocr import PaddleOCR
+    import numpy as np
+    from PIL import Image
+    import gc
     PADDLE_OCR_SUPPORT = True
 except ImportError:
     PADDLE_OCR_SUPPORT = False
@@ -133,12 +137,23 @@ class OCREngine:
                 enable_mkldnn = self.config.get("enable_mkldnn", False)
                 
                 # 显式传递内存优化参数
-                self.ocr_instance = PaddleOCR(
-                    use_angle_cls=use_angle_cls,
-                    lang=lang,
-                    cpu_threads=cpu_threads,
-                    enable_mkldnn=enable_mkldnn
-                )
+                try:
+                    self.ocr_instance = PaddleOCR(
+                        use_angle_cls=use_angle_cls,
+                        lang=lang,
+                        cpu_threads=cpu_threads,
+                        enable_mkldnn=enable_mkldnn,
+                        show_log=False,
+                        use_gpu=False
+                    )
+                except TypeError:
+                    # 如果不支持某些参数，尝试最简初始化
+                    print("[警告] PaddleOCR 不支持部分优化参数，尝试基础初始化...")
+                    self.ocr_instance = PaddleOCR(
+                        use_angle_cls=use_angle_cls,
+                        lang=lang
+                    )
+                
                 self.use_python_lib = True
                 self.is_initialized = True
                 print("[成功] Python 版 PaddleOCR 初始化完成")
@@ -352,21 +367,19 @@ class OCREngine:
 
         try:
             # 在执行识别前主动触发垃圾回收
-            import gc
             gc.collect()
             
-            import numpy as np
-            from PIL import Image
-            import io
-
             # 是否只提取文本（内存优化模式）
             extract_text = cmd_dict.get("extract_text", False)
 
             # 获取图像输入
             img_input = None
             if "image_path" in cmd_dict:
-                img_input = cmd_dict["image_path"]
+                img_path = cmd_dict["image_path"]
+                print(f"[引擎] 正在识别文件: {img_path}")
+                img_input = img_path
             elif "image_base64" in cmd_dict:
+                print(f"[引擎] 正在识别 Base64 图像...")
                 img_data = b64decode(cmd_dict["image_base64"])
                 img_input = np.array(Image.open(io.BytesIO(img_data)))
             
@@ -374,6 +387,7 @@ class OCREngine:
                 return {"code": 906, "data": "未提供有效的图像输入", "score": 0}
 
             # 执行识别
+            print(f"[引擎] 开始 OCR 推理...")
             try:
                 use_cls = cmd_dict.get("cls", self.config.get("cls", False))
                 result = self.ocr_instance.ocr(img_input, cls=use_cls)
@@ -382,6 +396,8 @@ class OCREngine:
                     result = self.ocr_instance.ocr(img_input)
                 else:
                     raise e
+            
+            print(f"[引擎] 推理完成，解析结果...")
             
             # 转换格式为 PaddleOCR-json 格式
             formatted_data = []

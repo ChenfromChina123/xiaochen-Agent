@@ -6,8 +6,8 @@ echo "OCR识别服务停止脚本"
 echo "============================================"
 echo ""
 
-# 进入脚本所在目录
-cd "$(dirname "$0")"
+# 进入项目根目录
+cd "$(dirname "$0")/.."
 
 PID_FILE="ocr_server.pid"
 
