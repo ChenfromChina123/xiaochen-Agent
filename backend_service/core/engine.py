@@ -166,7 +166,6 @@ class OCREngine:
                         "cpu_threads": cpu_threads,
                         "enable_mkldnn": enable_mkldnn,
                         "use_gpu": False,  # 强制禁用 GPU
-                        "show_log": False  # 减少日志输出
                     }
                     
                     # 如果找到了本地模型路径，则添加进去
