@@ -9,19 +9,50 @@ import sys
 import json
 import datetime
 import requests
+import uuid
+import threading
+import time
 from typing import Dict, Any, Optional
 
-# OCR backend_service 配置
-OCR_SERVER_URL = "http://localhost:5000"
-STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "storage", "ocr_results")
+# OCR backend_service 配置加载
+def _load_config():
+    """从 config.json 加载配置，如果失败则使用默认值"""
+    default_server_url = "http://localhost:5000"
+    default_storage_dir = "storage/ocr_results"
+    
+    # 尝试找到项目根目录下的 config.json
+    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config_path = os.path.join(current_dir, "config.json")
+    
+    server_url = default_server_url
+    storage_relative_path = default_storage_dir
+    max_storage_files = 50
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+                server_url = config_data.get("ocr_server_url", default_server_url)
+                storage_relative_path = config_data.get("ocr_storage_dir", default_storage_dir)
+                max_storage_files = config_data.get("ocr_max_storage_files", 50)
+        except Exception as e:
+            print(f"  [OCR警告] 无法加载配置文件 {config_path}: {e}")
+            
+    # 计算存储目录的绝对路径
+    if os.path.isabs(storage_relative_path):
+        abs_storage_dir = storage_relative_path
+    else:
+        abs_storage_dir = os.path.join(current_dir, storage_relative_path)
+        
+    return server_url, abs_storage_dir, max_storage_files
+
+OCR_SERVER_URL, STORAGE_DIR, MAX_STORAGE_FILES = _load_config()
 
 # 导入清理工具
 try:
     from ..utils.files import prune_directory
 except (ImportError, ValueError):
     prune_directory = None
-
-MAX_STORAGE_FILES = 50  # 默认最大保存条数
 
 if not os.path.exists(STORAGE_DIR):
     os.makedirs(STORAGE_DIR, exist_ok=True)
@@ -90,10 +121,13 @@ def ocr_image(image_path: str) -> Dict[str, Any]:
     url = f"{OCR_SERVER_URL}/api/ocr/file"
     
     try:
+        print(f"  [OCR] 正在发送图片到服务器: {os.path.basename(image_path)}...")
         with open(image_path, 'rb') as f:
             files = {'file': f}
             data = {'extract_text': 'true'}
             response = requests.post(url, files=files, data=data, timeout=30)
+        
+        print(f"  [OCR] 服务器响应状态: {response.status_code}")
             
         if response.status_code != 200:
             return {"success": False, "message": f"服务器返回错误: {response.status_code}"}
@@ -111,6 +145,32 @@ def ocr_image(image_path: str) -> Dict[str, Any]:
     except Exception as e:
         return {"success": False, "message": f"OCR 识别执行异常: {str(e)}"}
 
+def _poll_progress(task_id: str, stop_event: threading.Event):
+    """后台轮询进度并打印"""
+    last_percentage = -1
+    url = f"{OCR_SERVER_URL}/api/progress/{task_id}"
+    
+    while not stop_event.is_set():
+        try:
+            response = requests.get(url, timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    progress = data.get("data", {})
+                    percentage = progress.get("percentage", 0)
+                    current = progress.get("current", 0)
+                    total = progress.get("total", 0)
+                    
+                    if percentage > last_percentage:
+                        print(f"  [OCR进度] 处理中: {percentage}% ({current}/{total})")
+                        last_percentage = percentage
+            
+            if last_percentage >= 100:
+                break
+        except:
+            pass
+        time.sleep(1)
+
 def ocr_document(doc_path: str, page_start: int = 1, page_end: Optional[int] = None) -> Dict[str, Any]:
     """
     通过 backend_service 对 PDF 等文档文件进行 OCR 识别，并自动保存结果到本地
@@ -127,19 +187,33 @@ def ocr_document(doc_path: str, page_start: int = 1, page_end: Optional[int] = N
         return {"success": False, "message": f"文档文件不存在: {doc_path}"}
     
     url = f"{OCR_SERVER_URL}/api/ocr/document"
+    task_id = str(uuid.uuid4())
+    stop_event = threading.Event()
+    
+    # 启动进度轮询线程
+    progress_thread = threading.Thread(target=_poll_progress, args=(task_id, stop_event))
+    progress_thread.daemon = True
+    progress_thread.start()
     
     try:
+        print(f"  [OCR] 正在发送文档到服务器: {os.path.basename(doc_path)} (页码: {page_start}-{page_end if page_end else '末尾'})...")
         with open(doc_path, 'rb') as f:
             files = {'file': f}
             payload = {
                 'page_range_start': str(page_start),
-                'extract_text': 'true'
+                'extract_text': 'true',
+                'task_id': task_id
             }
             if page_end is not None:
                 payload['page_range_end'] = str(page_end)
                 
-            response = requests.post(url, files=files, data=payload, timeout=60)
-            
+            response = requests.post(url, files=files, data=payload, timeout=120)
+        
+        stop_event.set()
+        progress_thread.join(timeout=1)
+        
+        print(f"  [OCR] 服务器响应状态: {response.status_code}")
+        
         if response.status_code != 200:
             return {"success": False, "message": f"服务器返回错误: {response.status_code}"}
             
@@ -152,6 +226,8 @@ def ocr_document(doc_path: str, page_start: int = 1, page_end: Optional[int] = N
         return result
         
     except requests.exceptions.ConnectionError:
+        stop_event.set()
         return {"success": False, "message": "无法连接到 OCR backend_service，请确保服务已启动。"}
     except Exception as e:
+        stop_event.set()
         return {"success": False, "message": f"文档 OCR 识别执行异常: {str(e)}"}

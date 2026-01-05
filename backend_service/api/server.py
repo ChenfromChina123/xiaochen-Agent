@@ -83,7 +83,41 @@ def format_response(success=True, code=200, message="", data=None):
         'timestamp': datetime.now().isoformat()
     })
 
+# 进度存储目录
+PROGRESS_DIR = os.path.join(tempfile.gettempdir(), "ocr_progress")
+if not os.path.exists(PROGRESS_DIR):
+    os.makedirs(PROGRESS_DIR, exist_ok=True)
+
+def update_task_progress(task_id, current, total, percentage):
+    """更新任务进度到临时文件"""
+    if not task_id:
+        return
+    progress_file = os.path.join(PROGRESS_DIR, f"{task_id}.json")
+    try:
+        with open(progress_file, 'w') as f:
+            json.dump({
+                "current": current,
+                "total": total,
+                "percentage": percentage,
+                "timestamp": datetime.now().isoformat()
+            }, f)
+    except Exception as e:
+        print(f"[警告] 无法更新进度文件: {e}")
+
 # ==================== API路由 ====================
+
+@app.route('/api/progress/<task_id>')
+def get_progress(task_id):
+    """获取任务进度"""
+    progress_file = os.path.join(PROGRESS_DIR, f"{task_id}.json")
+    if os.path.exists(progress_file):
+        try:
+            with open(progress_file, 'r') as f:
+                data = json.load(f)
+            return format_response(success=True, data=data)
+        except:
+            pass
+    return format_response(success=False, message="任务不存在或进度不可用")
 
 @app.route('/')
 def index():
@@ -412,6 +446,7 @@ def ocr_document():
             # 获取参数
             page_start = request.form.get('page_range_start', None)
             page_end = request.form.get('page_range_end', None)
+            task_id = request.form.get('task_id', None)
             page_range = None
             if page_start and page_end:
                 page_range = [int(page_start), int(page_end)]
@@ -422,7 +457,20 @@ def ocr_document():
             
             # OCR识别
             engine = init_ocr_engine()
-            result = engine.recognize_document(temp_path, page_range=page_range, dpi=dpi, password=password)
+            
+            # 定义进度回调函数
+            def progress_callback(current, total, percentage):
+                print(f"[进度] 文档识别中: {percentage}% ({current}/{total}页)")
+                if task_id:
+                    update_task_progress(task_id, current, total, percentage)
+            
+            result = engine.recognize_document(temp_path, page_range=page_range, dpi=dpi, password=password, progress_callback=progress_callback)
+            
+            # 完成后清理进度文件
+            if task_id:
+                progress_file = os.path.join(PROGRESS_DIR, f"{task_id}.json")
+                if os.path.exists(progress_file):
+                    os.remove(progress_file)
             
             if extract_text and result.get('code') == 100:
                 text = engine.extract_text(result)
@@ -478,6 +526,7 @@ def ocr_batch():
             )
         
         files = request.files.getlist('files')
+        task_id = request.form.get('task_id', None)
         
         if not files:
             return format_response(
@@ -493,11 +542,21 @@ def ocr_batch():
         
         try:
             engine = init_ocr_engine()
+            total_files = len(files)
+            last_progress = -1
             
             # 收集文件并识别
-            for file in files:
+            for i, file in enumerate(files):
                 if file.filename == '':
                     continue
+                
+                # 计算并显示进度
+                current_progress = int((i / total_files) * 100)
+                if current_progress // 10 > last_progress // 10:
+                    print(f"[进度] 批量识别中: {current_progress}% ({i}/{total_files})")
+                    if task_id:
+                        update_task_progress(task_id, i, total_files, current_progress)
+                    last_progress = current_progress
                 
                 filename = secure_filename(file.filename)
                 ext = os.path.splitext(filename)[-1].lower()
@@ -555,6 +614,17 @@ def ocr_batch():
                         'success': False,
                         'message': f'识别失败: {str(e)}'
                     })
+            
+            # 报告 100% 进度
+            print(f"[进度] 批量识别完成: 100% ({len(results)}/{total_files})")
+            if task_id:
+                update_task_progress(task_id, total_files, total_files, 100)
+                # 稍微延迟删除，让客户端有机会读取到100%
+                # 但这里是同步请求，客户端只有在请求结束后才会知道100%，
+                # 所以其实请求结束后删除即可
+                progress_file = os.path.join(PROGRESS_DIR, f"{task_id}.json")
+                if os.path.exists(progress_file):
+                    os.remove(progress_file)
             
             return format_response(
                 success=True,

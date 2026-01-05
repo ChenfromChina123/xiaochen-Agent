@@ -280,7 +280,7 @@ class OCREngine:
         except Exception as e:
             return {"code": 905, "data": f"OCR识别异常: {e}", "score": 0}
     
-    def recognize_document(self, doc_path, page_range=None, dpi=200, password=""):
+    def recognize_document(self, doc_path, page_range=None, dpi=200, password="", progress_callback=None):
         """
         识别PDF等文档文件（支持多页）
         
@@ -289,6 +289,7 @@ class OCREngine:
             page_range: 页面范围，None=全部页面，[start, end]=指定范围（从1开始）
             dpi: 渲染DPI，影响图片质量和识别准确度，默认200
             password: 文档密码（如果需要）
+            progress_callback: 进度回调函数，接收参数 (current_page, total_pages, progress_percentage)
             
         返回:
             识别结果字典: {
@@ -321,12 +322,17 @@ class OCREngine:
             # 确定页面范围
             page_count = doc.page_count
             if page_range is None:
-                pages_to_process = range(page_count)
+                pages_to_process = list(range(page_count))
             else:
                 start, end = page_range
                 start = max(1, min(start, page_count)) - 1  # 转为0-based
                 end = max(1, min(end, page_count))
-                pages_to_process = range(start, end)
+                pages_to_process = list(range(start, end))
+            
+            total_to_process = len(pages_to_process)
+            
+            # 进度跟踪
+            last_progress = -1
             
             # 逐页识别
             all_results = []
@@ -334,7 +340,17 @@ class OCREngine:
             total_score = 0
             success_count = 0
             
-            for page_num in pages_to_process:
+            for i, page_num in enumerate(pages_to_process):
+                # 计算进度
+                current_progress = int((i / total_to_process) * 100)
+                # 每完成10%反馈一次
+                if current_progress // 10 > last_progress // 10:
+                    if progress_callback:
+                        progress_callback(i, total_to_process, current_progress)
+                    else:
+                        print(f"[进度] 文档识别中: {current_progress}% ({i}/{total_to_process}页)")
+                    last_progress = current_progress
+
                 page = doc[page_num]
                 
                 # 将页面渲染为图片
@@ -364,6 +380,12 @@ class OCREngine:
             
             # 汇总结果
             avg_score = total_score / success_count if success_count > 0 else 0
+            
+            # 报告 100% 进度
+            if progress_callback:
+                progress_callback(total_to_process, total_to_process, 100)
+            else:
+                print(f"[进度] 文档识别完成: 100% ({total_to_process}/{total_to_process}页)")
             
             if all_text_blocks:
                 return {
@@ -415,13 +437,14 @@ class OCREngine:
         except Exception as e:
             return {"code": 913, "data": f"URL下载或识别失败: {e}", "score": 0}
     
-    def recognize_directory(self, dir_path, recursive=False):
+    def recognize_directory(self, dir_path, recursive=False, progress_callback=None):
         """
         识别目录中的所有图片/文档
         
         参数:
             dir_path: 目录路径
             recursive: 是否递归子目录
+            progress_callback: 进度回调函数
             
         返回:
             识别结果列表
@@ -431,7 +454,7 @@ class OCREngine:
         
         # 收集所有支持的文件
         file_paths = []
-        supported_formats = self.SUPPORTED_FORMATS
+        supported_formats = self.get_supported_formats()
         
         if recursive:
             for root, dirs, files in os.walk(dir_path):
@@ -448,14 +471,15 @@ class OCREngine:
                         file_paths.append(file_path)
         
         # 批量识别
-        return self.batch_recognize(file_paths)
+        return self.batch_recognize(file_paths, progress_callback=progress_callback)
     
-    def batch_recognize(self, image_paths):
+    def batch_recognize(self, image_paths, progress_callback=None):
         """
         批量识别图片/文档
         
         参数:
             image_paths: 图片/文档路径列表（可以是字符串列表或单个字符串）
+            progress_callback: 进度回调函数，接收参数 (current_index, total_count, progress_percentage)
             
         返回:
             识别结果列表
@@ -464,11 +488,30 @@ class OCREngine:
         if isinstance(image_paths, str):
             image_paths = [image_paths]
         
+        total_count = len(image_paths)
         results = []
-        for path in image_paths:
+        last_progress = -1
+        
+        for i, path in enumerate(image_paths):
+            # 计算并报告进度
+            current_progress = int((i / total_count) * 100)
+            if current_progress // 10 > last_progress // 10:
+                if progress_callback:
+                    progress_callback(i, total_count, current_progress)
+                else:
+                    print(f"[进度] 批量识别中: {current_progress}% ({i}/{total_count}个文件)")
+                last_progress = current_progress
+                
             result = self.recognize_image(path)
             result["path"] = path
             results.append(result)
+        
+        # 报告 100% 进度
+        if progress_callback:
+            progress_callback(total_count, total_count, 100)
+        else:
+            print(f"[进度] 批量识别完成: 100% ({total_count}/{total_count}个文件)")
+            
         return results
     
     def extract_text(self, result):

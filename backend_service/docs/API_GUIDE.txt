@@ -115,20 +115,33 @@ OCREngine(config_path="configs/config.json")
            base64_str = base64.b64encode(f.read()).decode()
        result = engine.recognize_base64(base64_str)
 
-5. batch_recognize(image_paths)
-   功能: 批量识别多张图片
+5. recognize_document(doc_path, page_range=None, dpi=200, password="", progress_callback=None)
+   功能: 识别PDF、EPUB、MOBI等文档（支持多页）
    参数:
-       image_paths (list): 图片路径列表
-   返回: list - 识别结果列表
+       doc_path (str): 文档路径
+       page_range (list): [起始页, 结束页]（从1开始），None表示全部
+       dpi (int): 渲染质量，默认200
+       password (str): 文档密码
+       progress_callback (func): 进度回调函数，接收 (current, total, percentage)
+   返回: dict - 包含汇总结果和分页结果的字典
    
    示例:
-       paths = ["img1.jpg", "img2.png", "img3.jpg"]
-       results = engine.batch_recognize(paths)
-       for result in results:
-           print(f"图片: {result['path']}")
-           print(f"状态: {result['code']}")
+       # 使用默认控制台进度显示
+       result = engine.recognize_document("book.pdf")
+       
+       # 自定义进度显示
+       def my_progress(curr, total, perc):
+           print(f"当前进度: {perc}%")
+       result = engine.recognize_document("book.pdf", progress_callback=my_progress)
 
-6. extract_text(result)
+6. batch_recognize(image_paths, progress_callback=None)
+   功能: 批量识别多个文件
+   参数:
+       image_paths (list): 文件路径列表
+       progress_callback (func): 进度回调函数
+   返回: list - 每个文件的识别结果字典列表
+
+7. extract_text(result)
    功能: 从识别结果中提取纯文本
    参数:
        result (dict): recognize_* 方法返回的结果字典
@@ -139,7 +152,7 @@ OCREngine(config_path="configs/config.json")
        text = engine.extract_text(result)
        print(text)
 
-7. close()
+8. close()
    功能: 关闭OCR引擎，释放资源
    参数: 无
    返回: 无

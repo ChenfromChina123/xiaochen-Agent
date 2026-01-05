@@ -18,9 +18,8 @@ def get_repo_root() -> str:
         # 打包环境：sys.executable 是 EXE 的完整路径
         return os.path.dirname(os.path.abspath(sys.executable))
     
-    # 源码环境：基于当前文件的位置推算
-    pkg_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    return os.path.abspath(os.path.join(pkg_dir, ".."))
+    # 源码环境：将 xiaochen_agent_v2 视为项目根目录
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
 def get_logs_root() -> str:

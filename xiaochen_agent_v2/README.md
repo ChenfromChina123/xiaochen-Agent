@@ -152,7 +152,7 @@ agent.bat
 
 - **正常对话**：直接输入问题或指令
 - **保存会话**：输入 `save` 保存当前会话
-- **自动保存**：对话过程中自动保存到 `logs/sessions/*_autosave.json`，退出时也会自动保存
+- **自动保存**：对话过程中自动保存到 `xiaochen_agent_v2/logs/sessions/*_autosave.json`，退出时也会自动保存
 - **清空历史**：输入 `clear` 清空会话历史
 - **回滚操作**：输入 `rollback` 撤销上一次文件操作
 - **一键回退对话**：输入 `undo` 回退到上一次对话（含文件修改）
