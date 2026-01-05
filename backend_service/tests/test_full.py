@@ -5,8 +5,9 @@
 import sys
 import os
 
-# 获取项目根目录
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 获取项目根目录和脚本目录
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(SCRIPT_DIR)
 
 # 添加项目根目录到路径
 sys.path.insert(0, BASE_DIR)
@@ -38,10 +39,10 @@ def test_api_methods():
                 print(f"✗ {method} 方法不存在")
                 return False
         
-        # 测试类属性
+        # 测试类方法
         try:
-            formats = engine.SUPPORTED_FORMATS
-            print(f"\n✓ SUPPORTED_FORMATS 属性存在")
+            formats = engine.get_supported_formats()
+            print(f"\n✓ get_supported_formats() 方法存在")
             print(f"  支持的格式: {', '.join(formats)}")
             print(f"  支持PDF/文档: {hasattr(engine, 'recognize_document')}")
         except Exception as e:

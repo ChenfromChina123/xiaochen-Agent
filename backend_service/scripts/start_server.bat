@@ -7,20 +7,27 @@ echo.
 
 cd /d %~dp0\..
 
+set PYTHON_EXE="D:\Users\Administrator\miniconda3\python.exe"
+
 echo [1] 检查Python环境...
-python --version
+%PYTHON_EXE% --version
 if errorlevel 1 (
-    echo [错误] 未找到Python，请先安装Python 3.7+
-    pause
-    exit /b 1
+    echo [警告] 未找到 Miniconda Python，尝试使用系统默认 python...
+    set PYTHON_EXE=python
+    python --version
+    if errorlevel 1 (
+        echo [错误] 未找到任何 Python 环境，请先安装 Python 3.7+
+        pause
+        exit /b 1
+    )
 )
 echo.
 
 echo [2] 检查依赖包...
-pip show Flask >nul 2>&1
+%PYTHON_EXE% -m pip show Flask >nul 2>&1
 if errorlevel 1 (
     echo [警告] 未找到Flask，正在安装依赖...
-    pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+    %PYTHON_EXE% -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
     if errorlevel 1 (
         echo [错误] 依赖安装失败
         pause
@@ -33,7 +40,7 @@ echo.
 
 echo [3] 启动OCR服务...
 echo.
-python api/server.py
+%PYTHON_EXE% api/server.py
 
 pause
 
