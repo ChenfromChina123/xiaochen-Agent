@@ -129,15 +129,18 @@ class OCREngine:
                 
                 # 提取更多配置参数
                 use_angle_cls = self.config.get("cls", self.config.get("use_angle_cls", False))
-                cpu_threads = self.config.get("cpu_threads", 4)
-                enable_mkldnn = self.config.get("enable_mkldnn", True)
-                limit_side_len = self.config.get("limit_side_len", 4320)
+                cpu_threads = self.config.get("cpu_threads", 1)
+                enable_mkldnn = self.config.get("enable_mkldnn", False)
                 
+                # 显式传递内存优化参数
                 self.ocr_instance = PaddleOCR(
                     use_angle_cls=use_angle_cls,
                     lang=lang,
                     cpu_threads=cpu_threads,
-                    enable_mkldnn=enable_mkldnn
+                    enable_mkldnn=enable_mkldnn,
+                    use_gpu=False,
+                    ir_optim=False,
+                    enable_tensorrt=False
                 )
                 self.use_python_lib = True
                 self.is_initialized = True
