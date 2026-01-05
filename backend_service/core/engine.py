@@ -138,13 +138,13 @@ class OCREngine:
                 
                 # 显式传递内存优化参数
                 try:
-                     self.ocr_instance = PaddleOCR(
-                         use_angle_cls=use_angle_cls,
-                         lang=lang,
-                         cpu_threads=cpu_threads,
-                         enable_mkldnn=enable_mkldnn
-                     )
-                 except TypeError:
+                    self.ocr_instance = PaddleOCR(
+                        use_angle_cls=use_angle_cls,
+                        lang=lang,
+                        cpu_threads=cpu_threads,
+                        enable_mkldnn=enable_mkldnn
+                    )
+                except TypeError:
                     # 如果不支持某些参数，尝试最简初始化
                     print("[警告] PaddleOCR 不支持部分优化参数，尝试基础初始化...")
                     self.ocr_instance = PaddleOCR(
