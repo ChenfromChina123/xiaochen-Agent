@@ -68,7 +68,7 @@ pip install -r requirements.txt
 python api/server.py
 ```
 
-服务启动后访问：`http://localhost:4999`
+服务启动后访问：`http://aistudy.icu/ocr`
 
 **可用接口**：
 - `POST /api/ocr/file` - 识别上传的文件
@@ -90,14 +90,14 @@ import requests
 # 文件识别
 with open('test.jpg', 'rb') as f:
     files = {'file': f}
-    response = requests.post('http://localhost:4999/api/ocr/file', files=files)
+    response = requests.post('http://aistudy.icu/ocr/api/ocr/file', files=files)
     print(response.json())
 
 # Base64识别
 import base64
 with open('test.jpg', 'rb') as f:
     image_base64 = base64.b64encode(f.read()).decode()
-    response = requests.post('http://localhost:4999/api/ocr/base64', 
+    response = requests.post('http://aistudy.icu/ocr/api/ocr/base64', 
                             json={'image': image_base64, 'extract_text': True})
     print(response.json()['data']['text'])
 ```
@@ -108,7 +108,7 @@ const formData = new FormData();
 formData.append('file', fileInput.files[0]);
 formData.append('extract_text', 'true');
 
-fetch('http://localhost:4999/api/ocr/file', {
+fetch('http://aistudy.icu/ocr/api/ocr/file', {
     method: 'POST',
     body: formData
 })
@@ -118,7 +118,7 @@ fetch('http://localhost:4999/api/ocr/file', {
 
 ```bash
 # curl命令行
-curl -X POST http://localhost:4999/api/ocr/file \
+curl -X POST http://aistudy.icu/ocr/api/ocr/file \
   -F "file=@test.jpg" \
   -F "extract_text=true"
 ```

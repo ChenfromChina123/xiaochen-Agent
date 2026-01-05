@@ -10,7 +10,7 @@ import base64
 import requests
 
 # 服务器地址
-SERVER_URL = "http://localhost:4999"
+SERVER_URL = "http://aistudy.icu/ocr"
 
 def test_health():
     """

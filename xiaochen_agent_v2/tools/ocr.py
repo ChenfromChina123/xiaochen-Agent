@@ -28,7 +28,7 @@ except (ImportError, ValueError):
 # OCR backend_service 配置加载
 def _load_config():
     """从 ocr_config.json 加载配置，如果失败则使用默认值"""
-    default_server_url = "http://localhost:4999"
+    default_server_url = "http://aistudy.icu/ocr"
     default_storage_dir = "ocr_results" # 默认相对于 get_storage_root()
     
     repo_root = get_repo_root()

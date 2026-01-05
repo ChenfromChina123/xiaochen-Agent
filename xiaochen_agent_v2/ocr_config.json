@@ -1,5 +1,5 @@
 {
-  "ocr_server_url": "http://localhost:4999",
+  "ocr_server_url": "http://aistudy.icu/ocr",
   "ocr_storage_dir": "storage/ocr_results",
   "ocr_max_storage_files": 50
 }
