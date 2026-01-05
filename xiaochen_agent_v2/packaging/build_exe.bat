@@ -39,10 +39,10 @@ if not exist ".venv" (
 echo [2/4] Installing requirements...
 call .venv\Scripts\activate
 python -m pip install --upgrade pip >nul
-pip install -r requirements.txt
+pip install -r xiaochen_agent_v2\requirements.txt
 
 echo [3/4] Building EXE...
-set ICON_PATH=%CD%\static\images\app.ico
+set ICON_PATH=%CD%\xiaochen_agent_v2\static\images\app.ico
 set ICON_PARAM=
 if exist "%ICON_PATH%" (
     echo [INFO] Found icon at %ICON_PATH%
@@ -55,7 +55,7 @@ if exist "%ICON_PATH%" (
 if exist "build" rd /s /q build
 if exist "dist" rd /s /q dist
 
-pyinstaller --onefile --name "xiaochen_terminal" --console --clean %ICON_PARAM% --add-data "xiaochen_agent_v2;xiaochen_agent_v2" --add-data "static;static" launcher.py
+pyinstaller --onefile --name "xiaochen_terminal" --console --clean %ICON_PARAM% --paths "." --add-data "xiaochen_agent_v2/static;xiaochen_agent_v2/static" --add-data "xiaochen_agent_v2/config.json;xiaochen_agent_v2" --add-data "xiaochen_agent_v2/ocr_config.json;xiaochen_agent_v2" xiaochen_agent_v2\packaging\launcher.py
 
 if %errorlevel% neq 0 (
     echo [ERROR] Build failed.

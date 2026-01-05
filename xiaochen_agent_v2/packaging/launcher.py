@@ -1,6 +1,16 @@
 import sys
 import os
 import io
+import platform
+import json
+import time
+import threading
+import requests
+import colorama
+import keyboard
+import PIL
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 """
 小晨终端助手 (XIAOCHEN_TERMINAL) - PyInstaller 启动器
@@ -14,9 +24,15 @@ if sys.stderr.encoding != 'utf-8':
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # 确保当前目录在路径中，以便能够导入 xiaochen_agent_v2 包
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
+if hasattr(sys, '_MEIPASS'):
+    # PyInstaller 打包后的路径
+    base_path = sys._MEIPASS
+else:
+    # 普通脚本运行路径
+    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+if base_path not in sys.path:
+    sys.path.insert(0, base_path)
 
 try:
     from xiaochen_agent_v2.ui.cli import run_cli

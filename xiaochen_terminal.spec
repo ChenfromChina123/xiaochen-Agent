@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['launcher.py'],
-    pathex=[],
+    ['xiaochen_agent_v2\\packaging\\launcher.py'],
+    pathex=['.'],
     binaries=[],
-    datas=[('../', 'xiaochen_agent_v2')],
+    datas=[('xiaochen_agent_v2/static', 'xiaochen_agent_v2/static'), ('xiaochen_agent_v2/config.json', 'xiaochen_agent_v2'), ('xiaochen_agent_v2/ocr_config.json', 'xiaochen_agent_v2')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='xiaochen_agent',
+    name='xiaochen_terminal',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['../static/images/app.ico'],
+    icon=['D:\\Users\\Administrator\\User-lab\\v2\\xiaochen_agent_v2\\static\\images\\app.ico'],
 )

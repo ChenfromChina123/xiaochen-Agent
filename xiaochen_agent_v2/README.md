@@ -82,6 +82,17 @@ chmod +x scripts/install.sh
 pip install -r requirements.txt
 ```
 
+### 方式三：打包部署 (Windows)
+
+1. 运行打包脚本：
+
+```cmd
+xiaochen_agent_v2\packaging\build_exe.bat
+```
+
+2. 打包完成后，在项目根目录的 `dist` 文件夹下会生成 `xiaochen_terminal.exe`。
+3. 您可以将该 EXE 文件移动到任何位置直接运行，无需安装 Python 环境。
+
 #### 2. 配置 API Key（三种方式任选其一）
 
 **方式 A：使用配置文件（推荐）**

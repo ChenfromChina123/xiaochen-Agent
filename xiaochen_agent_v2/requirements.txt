@@ -16,3 +16,6 @@ keyboard>=0.13.5
 # 图像处理 (OCR与剪贴板支持)
 Pillow>=10.0.0
 
+# 打包工具
+pyinstaller>=6.0.0
+
