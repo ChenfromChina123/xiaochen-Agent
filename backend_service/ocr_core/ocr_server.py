@@ -27,7 +27,9 @@ CORS(app)  # 允许跨域请求
 # 配置
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 最大50MB
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
-app.config['OCR_CONFIG'] = 'config.json'
+# 使用绝对路径加载配置文件，避免工作目录不同导致加载错误
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app.config['OCR_CONFIG'] = os.path.join(BASE_DIR, 'config.json')
 
 # 允许的文件扩展名
 ALLOWED_EXTENSIONS = {

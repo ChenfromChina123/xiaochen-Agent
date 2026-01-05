@@ -56,7 +56,9 @@ class OCREngine:
         参数:
             config_path: 配置文件路径，默认为 config.json
         """
-        self.config = self._load_config(config_path)
+        self.config_path = os.path.abspath(config_path) if config_path else None
+        self.config_dir = os.path.dirname(self.config_path) if self.config_path else os.getcwd()
+        self.config = self._load_config(self.config_path)
         self.process = None
         self.is_initialized = False
         
@@ -85,6 +87,14 @@ class OCREngine:
                 "limit_side_len": 4320
             }
     
+    def _get_absolute_path(self, path):
+        """将配置中的路径转换为绝对路径"""
+        if not path:
+            return ""
+        if os.path.isabs(path):
+            return path
+        return os.path.abspath(os.path.join(self.config_dir, path))
+
     def initialize(self):
         """
         初始化OCR引擎进程
@@ -97,7 +107,7 @@ class OCREngine:
             
         try:
             # 获取exe路径
-            exe_path = os.path.abspath(self.config.get("exe_path", ""))
+            exe_path = self._get_absolute_path(self.config.get("exe_path", ""))
             if not os.path.exists(exe_path):
                 print(f"[错误] OCR引擎不存在: {exe_path}")
                 return False
@@ -109,7 +119,7 @@ class OCREngine:
             # 添加启动参数
             models_path = self.config.get("models_path")
             if models_path:
-                models_path = os.path.abspath(models_path)
+                models_path = self._get_absolute_path(models_path)
                 if os.path.exists(models_path):
                     cmds += ["--models_path", models_path]
             
