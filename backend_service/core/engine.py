@@ -138,8 +138,7 @@ class OCREngine:
                     lang=lang,
                     use_gpu=False, # 默认 CPU
                     cpu_threads=cpu_threads,
-                    enable_mkldnn=enable_mkldnn,
-                    limit_side_len=limit_side_len
+                    enable_mkldnn=enable_mkldnn
                 )
                 self.use_python_lib = True
                 self.is_initialized = True
