@@ -147,15 +147,21 @@ class OCREngine:
                     models_path = self._get_absolute_path(models_path)
                     print(f"[信息] 尝试加载本地模型: {models_path}")
                     
-                    # 检查模型子目录是否存在
+                    # 优先检查 v4 模型
                     if os.path.exists(os.path.join(models_path, "ocr-v4/ch/ch_PP-OCRv4_det_infer")):
                          det_model_dir = os.path.join(models_path, "ocr-v4/ch/ch_PP-OCRv4_det_infer")
+                    elif os.path.exists(os.path.join(models_path, "ch_PP-OCRv4_det_infer")):
+                         det_model_dir = os.path.join(models_path, "ch_PP-OCRv4_det_infer")
                     
                     if os.path.exists(os.path.join(models_path, "ocr-v4/ch/ch_PP-OCRv4_rec_infer")):
                          rec_model_dir = os.path.join(models_path, "ocr-v4/ch/ch_PP-OCRv4_rec_infer")
+                    elif os.path.exists(os.path.join(models_path, "ch_PP-OCRv4_rec_infer")):
+                         rec_model_dir = os.path.join(models_path, "ch_PP-OCRv4_rec_infer")
                          
                     if os.path.exists(os.path.join(models_path, "ocr-v4/ch/ch_ppocr_mobile_v2.0_cls_infer")):
                          cls_model_dir = os.path.join(models_path, "ocr-v4/ch/ch_ppocr_mobile_v2.0_cls_infer")
+                    elif os.path.exists(os.path.join(models_path, "ch_ppocr_mobile_v2.0_cls_infer")):
+                         cls_model_dir = os.path.join(models_path, "ch_ppocr_mobile_v2.0_cls_infer")
 
                 # 显式传递内存优化参数
                 try:
@@ -169,12 +175,24 @@ class OCREngine:
                     }
                     
                     # 如果找到了本地模型路径，则添加进去
-                    if det_model_dir: ocr_params["det_model_dir"] = det_model_dir
-                    if rec_model_dir: ocr_params["rec_model_dir"] = rec_model_dir
-                    if cls_model_dir: ocr_params["cls_model_dir"] = cls_model_dir
+                    if det_model_dir: 
+                        ocr_params["det_model_dir"] = det_model_dir
+                        print(f"[信息] 使用本地检测模型: {det_model_dir}")
+                    if rec_model_dir: 
+                        ocr_params["rec_model_dir"] = rec_model_dir
+                        print(f"[信息] 使用本地识别模型: {rec_model_dir}")
+                    if cls_model_dir: 
+                        ocr_params["cls_model_dir"] = cls_model_dir
+                        print(f"[信息] 使用本地分类模型: {cls_model_dir}")
                     
                     print(f"[信息] PaddleOCR 初始化参数: {ocr_params}")
                     self.ocr_instance = PaddleOCR(**ocr_params)
+                    
+                    # 立即执行一次热身识别，确保模型加载成功且内存足够
+                    print("[信息] 正在进行热身识别...")
+                    dummy_img = np.full((100, 100, 3), 255, dtype=np.uint8)
+                    self.ocr_instance.ocr(dummy_img, cls=use_angle_cls)
+                    print("[成功] 热身识别完成，引擎就绪")
 
                 except TypeError:
                     # 如果不支持某些参数，尝试最简初始化
