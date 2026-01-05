@@ -479,17 +479,11 @@ class OCREngine:
             total_score = 0
             success_count = 0
             
-            for i, page_num in enumerate(pages_to_process):
-                # 计算进度
-                current_progress = int((i / total_to_process) * 100)
-                # 每完成10%反馈一次
-                if current_progress // 10 > last_progress // 10:
-                    if progress_callback:
-                        progress_callback(i, total_to_process, current_progress)
-                    else:
-                        print(f"[进度] 文档识别中: {current_progress}% ({i}/{total_to_process}页)")
-                    last_progress = current_progress
+            # 初始进度
+            if progress_callback:
+                progress_callback(0, total_to_process, 0)
 
+            for i, page_num in enumerate(pages_to_process):
                 page = doc[page_num]
                 
                 # 将页面渲染为图片
@@ -514,7 +508,19 @@ class OCREngine:
                     "result": result
                 }
                 all_results.append(page_result)
-            
+
+                # 处理完当前页后计算进度
+                processed_count = i + 1
+                current_progress = int((processed_count / total_to_process) * 100)
+                
+                # 每完成10%反馈一次，或者完成了最后一页
+                if current_progress // 10 > last_progress // 10 or processed_count == total_to_process:
+                    if progress_callback:
+                        progress_callback(processed_count, total_to_process, current_progress)
+                    else:
+                        print(f"[进度] 文档识别中: {current_progress}% ({processed_count}/{total_to_process}页)")
+                    last_progress = current_progress
+
             doc.close()
             
             # 汇总结果

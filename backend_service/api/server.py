@@ -548,18 +548,15 @@ def ocr_batch():
             total_files = len(files)
             last_progress = -1
             
+            # 初始进度反馈
+            if task_id:
+                update_task_progress(task_id, 0, total_files, 0)
+            print(f"[进度] 批量识别开始: 0% (0/{total_files})")
+
             # 收集文件并识别
             for i, file in enumerate(files):
                 if file.filename == '':
                     continue
-                
-                # 计算并显示进度
-                current_progress = int((i / total_files) * 100)
-                if current_progress // 10 > last_progress // 10:
-                    print(f"[进度] 批量识别中: {current_progress}% ({i}/{total_files})")
-                    if task_id:
-                        update_task_progress(task_id, i, total_files, current_progress)
-                    last_progress = current_progress
                 
                 filename = secure_filename(file.filename)
                 ext = os.path.splitext(filename)[-1].lower()
@@ -617,18 +614,21 @@ def ocr_batch():
                         'success': False,
                         'message': f'识别失败: {str(e)}'
                     })
+
+                # 计算并更新进度 (处理完当前文件后)
+                processed_count = i + 1
+                current_progress = int((processed_count / total_files) * 100)
+                if current_progress // 10 > last_progress // 10 or processed_count == total_files:
+                    print(f"[进度] 批量识别中: {current_progress}% ({processed_count}/{total_files})")
+                    if task_id:
+                        update_task_progress(task_id, processed_count, total_files, current_progress)
+                    last_progress = current_progress
             
-            # 报告 100% 进度
-            print(f"[进度] 批量识别完成: 100% ({len(results)}/{total_files})")
+            # 批量识别完成后的处理
             if task_id:
-                update_task_progress(task_id, total_files, total_files, 100)
-                # 稍微延迟删除，让客户端有机会读取到100%
-                # 但这里是同步请求，客户端只有在请求结束后才会知道100%，
-                # 所以其实请求结束后删除即可
-                progress_file = os.path.join(PROGRESS_DIR, f"{task_id}.json")
-                if os.path.exists(progress_file):
-                    os.remove(progress_file)
-            
+                # 稍微延迟清理，确保前端能拿到 100%
+                pass 
+
             return format_response(
                 success=True,
                 message=f"批量识别完成，共{len(results)}个文件",
