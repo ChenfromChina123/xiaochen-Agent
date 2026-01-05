@@ -209,6 +209,10 @@ class Agent:
             msg = choices[0].get("message") if isinstance(choices[0], dict) else None
             content = (msg.get("content") if isinstance(msg, dict) else "") or ""
             return str(content).strip()
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                print(f"{Fore.RED}[Summary Error] 401 Unauthorized: API Key 无效。{Style.RESET_ALL}")
+            return ""
         except Exception:
             return ""
 
@@ -653,6 +657,10 @@ class Agent:
             if len(title) > 16:
                 title = title[:16]
             return title
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                print(f"{Fore.RED}[Title Error] 401 Unauthorized: API Key 无效。{Style.RESET_ALL}")
+            return ""
         except Exception:
             return ""
 
@@ -810,7 +818,11 @@ class Agent:
                     else:
                         replyFull += "\n[Interrupted]"
                 except requests.exceptions.RequestException as e:
-                    msgError = f"{Fore.RED}[Request Error] {str(e)}{Style.RESET_ALL}"
+                    if e.response is not None and e.response.status_code == 401:
+                        msgError = f"{Fore.RED}[Request Error] 401 Unauthorized: 您的 API Key 无效或已过期。{Style.RESET_ALL}\n"
+                        msgError += f"{Fore.YELLOW}请检查 config.json 中的 api_key，或使用命令 `model key <your_key>` 重新设置。{Style.RESET_ALL}"
+                    else:
+                        msgError = f"{Fore.RED}[Request Error] {str(e)}{Style.RESET_ALL}"
                     print(msgError)
                     replyFull = msgError
                     break
