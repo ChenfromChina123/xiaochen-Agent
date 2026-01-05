@@ -435,6 +435,7 @@ def run_cli() -> None:
 
     pending_pastes = []  # 存储当前待处理的粘贴文件路径
     just_pasted = False  # 标记是否刚刚发生了粘贴操作，用于刷新输入行
+    last_paste_time = 0  # 记录上一次粘贴的时间，用于防抖
 
     def is_terminal_active() -> bool:
         """
@@ -472,7 +473,13 @@ def run_cli() -> None:
 
     def handle_clipboard_shortcut():
         """监听 Ctrl+V 快捷键，实时处理图片/文档"""
-        nonlocal pending_pastes, just_pasted
+        nonlocal pending_pastes, just_pasted, last_paste_time
+        
+        # 防抖处理：500ms 内只允许一次粘贴
+        current_time = time.time()
+        if current_time - last_paste_time < 0.5:
+            return
+        last_paste_time = current_time
         
         # 核心修改：仅在终端窗口激活时处理
         try:
