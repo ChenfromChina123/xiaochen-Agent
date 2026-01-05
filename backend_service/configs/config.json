@@ -5,11 +5,6 @@
     "cpu_threads": 1,
     "enable_mkldnn": false,
     "cls": false,
-    "use_python_lib": true,
-    "limit_side_len": 960,
-    "use_gpu": false,
-    "ir_optim": false,
-    "document_dpi": 200,
-    "use_python_lib": false
+    "use_python_lib": true
 }
 
