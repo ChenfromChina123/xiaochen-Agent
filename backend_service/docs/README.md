@@ -68,7 +68,7 @@ pip install -r requirements.txt
 python api/server.py
 ```
 
-服务启动后访问：`http://aistudy.icu/ocr`
+服务启动后访问：`http://127.0.0.1:4999/ocr`
 
 **可用接口**：
 - `POST /api/ocr/file` - 识别上传的文件
@@ -92,7 +92,7 @@ import requests
 # 文件识别
 with open('test.jpg', 'rb') as f:
     files = {'file': f}
-    response = requests.post('http://aistudy.icu/ocr/api/ocr/file', files=files)
+    response = requests.post('http://127.0.0.1:4999/ocr/api/ocr/file', files=files)
     print(response.json())
 
 # Base64识别

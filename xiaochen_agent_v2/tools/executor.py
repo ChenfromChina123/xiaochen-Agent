@@ -618,7 +618,6 @@ class Tools:
     def ocr_image(self, t: Dict[str, Any], index: int = 1, total: int = 1) -> str:
         path = os.path.abspath(t["path"])
         try:
-            print_tool_execution_header({"type": "ocr_image", "path": path}, index, total)
             result = ocr_image(path)
             if result.get("success") or result.get("code") == 100:
                 # 兼容新旧格式
@@ -649,12 +648,6 @@ class Tools:
         page_end = int(raw_end) if raw_end and str(raw_end).strip() else None
         
         try:
-            print_tool_execution_header({
-                "type": "ocr_document",
-                "path": path,
-                "page_start": page_start,
-                "page_end": page_end
-            }, index, total)
             result = ocr_document(path, page_start=page_start, page_end=page_end)
             if result.get("success") or result.get("code") == 100:
                 # 兼容新旧格式

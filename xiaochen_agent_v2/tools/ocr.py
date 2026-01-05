@@ -249,6 +249,17 @@ def ocr_document(doc_path: str, page_start: int = 1, page_end: Optional[int] = N
                 result["data"]["saved_path"] = save_path
         return result
         
+    except KeyboardInterrupt:
+        print(f"\n  [OCR] 任务由用户中断，正在尝试通知服务器终止任务...")
+        stop_event.set()
+        try:
+            terminate_url = f"{OCR_SERVER_URL}/api/ocr/terminate/{task_id}"
+            requests.post(terminate_url, timeout=5)
+            print(f"  [OCR] 服务器已收到终止请求")
+        except Exception as e:
+            print(f"  [OCR] 通知服务器终止失败: {e}")
+        # 重新抛出中断，让 Agent 逻辑继续处理
+        raise
     except requests.exceptions.ConnectionError:
         stop_event.set()
         return {"success": False, "message": "无法连接到 OCR backend_service，请确保服务已启动。"}

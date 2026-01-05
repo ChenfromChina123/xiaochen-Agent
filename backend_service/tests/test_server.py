@@ -16,7 +16,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 # 服务器地址
-SERVER_URL = "http://aistudy.icu/ocr"
+SERVER_URL = "http://127.0.0.1:4999/ocr"
 
 def create_test_image(text="测试文字OCR", filename=None):
     """

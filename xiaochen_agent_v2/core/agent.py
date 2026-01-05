@@ -893,6 +893,20 @@ class Agent:
                         except Exception:
                             pass
                     tasks = parse_stack_of_tags(replyFull)
+                    
+                    # 对任务进行去重，防止相同任务在同一批次中重复执行
+                    if tasks:
+                        unique_tasks = []
+                        seen_tasks = set()
+                        for t in tasks:
+                            # 转换为可哈希的字符串表示进行去重
+                            t_repr = str(sorted(t.items()))
+                            if t_repr not in seen_tasks:
+                                seen_tasks.add(t_repr)
+                                unique_tasks.append(t)
+                        if len(unique_tasks) < len(tasks):
+                            print(f"{Fore.YELLOW}[系统] 已自动过滤 {len(tasks) - len(unique_tasks)} 个重复任务{Style.RESET_ALL}")
+                        tasks = unique_tasks
 
                     if not tasks:
                         replyLower = replyFull.lower()
@@ -911,21 +925,25 @@ class Agent:
                             "<task_delete",
                             "<task_list",
                             "<task_clear",
-                            "</write_file",
-                            "</read_file",
-                            "</run_command",
-                            "</search_files",
-                            "</search_in_files",
-                            "</edit_lines",
-                            "</replace_in_file",
-                            "</web_search",
-                            "</visit_page",
-                            "</task_add",
-                            "</task_update",
-                            "</task_delete",
-                            "</task_list",
-                            "</task_clear",
-                        ]
+                        "<ocr_image",
+                        "<ocr_document",
+                        "</write_file",
+                        "</read_file",
+                        "</run_command",
+                        "</search_files",
+                        "</search_in_files",
+                        "</edit_lines",
+                        "</replace_in_file",
+                        "</web_search",
+                        "</visit_page",
+                        "</task_add",
+                        "</task_update",
+                        "</task_delete",
+                        "</task_list",
+                        "</task_clear",
+                        "</ocr_image",
+                        "</ocr_document",
+                    ]
                         if any(tok in replyLower for tok in suspiciousTagTokens):
                             feedbackError = "ERROR: Invalid Format! Use one or more closed tags. No tag if no task."
                             historyWorking.append({"role": "user", "content": feedbackError})

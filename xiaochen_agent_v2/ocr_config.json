@@ -1,5 +1,5 @@
 {
-  "ocr_server_url": "http://aistudy.icu/ocr",
+  "ocr_server_url": "http://127.0.0.1:4999/ocr",
   "ocr_storage_dir": "storage/ocr_results",
   "ocr_max_storage_files": 50
 }
