@@ -65,10 +65,72 @@ curl http://127.0.0.1:4999/ocr/api/status
 
 **请求参数**:
 - `file` (必需): 上传的文件 (multipart/form-data)
-- `extract_text` (可选): 是否只返回纯文本，默认false
+- `extract_text` (可选): 是否只提取文本内容。如果为 `true`，返回结果将只包含识别到的文字，不包含坐标信息。这可以显著减少服务器内存占用。默认 `false`。
+- `plain` (可选): 是否返回纯文本格式。如果为 `true`，且 `extract_text` 也为 `true`，接口将直接返回 `text/plain` 格式的识别文本，而不是 JSON 格式。默认 `false`。
 - `task_id` (可选): 任务ID，用于进度追踪和终止
 
 **请求示例** (curl):
+```bash
+# 返回 JSON 格式的文本提取结果
+curl -X POST http://127.0.0.1:4999/ocr/api/ocr/file \
+  -F "file=@test.jpg" \
+  -F "extract_text=true"
+
+# 直接返回纯文本结果 (text/plain)
+curl -X POST http://127.0.0.1:4999/ocr/api/ocr/file \
+  -F "file=@test.jpg" \
+  -F "extract_text=true" \
+  -F "plain=true"
+```
+
+---
+
+### 5. Base64识别
+
+**接口**: `POST /api/ocr/base64`
+
+**说明**: 识别base64编码的图片字符串
+
+**请求参数 (JSON)**:
+- `image` (必需): 图片的base64编码字符串
+- `extract_text` (可选): 是否只提取文本内容，默认 `false`。
+- `plain` (可选): 是否返回纯文本格式，默认 `false`。
+
+**请求示例**:
+```bash
+curl -X POST http://127.0.0.1:4999/ocr/api/ocr/base64 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image": "iVBORw0KGgoAAAANSUhEUgAA...",
+    "extract_text": true,
+    "plain": true
+  }'
+```
+
+---
+
+### 6. URL识别
+
+**接口**: `POST /api/ocr/url`
+
+**说明**: 识别网络上的图片URL
+
+**请求参数 (JSON)**:
+- `url` (必需): 图片的公开访问URL
+- `timeout` (可选): 下载超时时间（秒），默认30
+- `extract_text` (可选): 是否只提取文本内容，默认 `false`。
+- `plain` (可选): 是否返回纯文本格式，默认 `false`。
+
+**请求示例**:
+```bash
+curl -X POST http://127.0.0.1:4999/ocr/api/ocr/url \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/image.jpg",
+    "extract_text": true,
+    "plain": true
+  }'
+```
 ```bash
 # 完整结果
 curl -X POST http://127.0.0.1:4999/ocr/api/ocr/file \

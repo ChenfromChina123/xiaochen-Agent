@@ -10,7 +10,7 @@ import json
 import base64
 import tempfile
 from datetime import datetime
-from flask import Flask, request, jsonify, Blueprint
+from flask import Flask, request, jsonify, Blueprint, Response
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -274,13 +274,16 @@ def ocr_file():
         if ext in engine.SUPPORTED_IMAGE_FORMATS:
             # 图片处理：直接读取字节流，避免产生临时文件导致的文件占用问题
             file_bytes = file.read()
-            result = engine.recognize_bytes(file_bytes)
-            
             # 是否只返回文本
             extract_text = request.form.get('extract_text', 'false').lower() == 'true'
             
+            result = engine.recognize_bytes(file_bytes, extract_text=extract_text)
+            
             if extract_text and result.get('code') == 100:
                 text = engine.extract_text(result)
+                # 检查是否要求返回原始文本内容（text/plain）
+                if request.form.get('plain', 'false').lower() == 'true':
+                    return Response(text, mimetype='text/plain')
                 return format_response(
                     success=True,
                     message="识别成功",
@@ -302,14 +305,17 @@ def ocr_file():
             file.save(temp_path)
             
             try:
-                # OCR识别
-                result = engine.recognize_image(temp_path)
-                
                 # 是否只返回文本
                 extract_text = request.form.get('extract_text', 'false').lower() == 'true'
                 
+                # OCR识别
+                result = engine.recognize_document(temp_path, extract_text=extract_text)
+                
                 if extract_text and result.get('code') == 100:
                     text = engine.extract_text(result)
+                    # 检查是否要求返回原始文本内容（text/plain）
+                    if request.form.get('plain', 'false').lower() == 'true':
+                        return Response(text, mimetype='text/plain')
                     return format_response(
                         success=True,
                         message="识别成功",
@@ -364,13 +370,17 @@ def ocr_base64():
         
         image_base64 = data['image']
         extract_text = data.get('extract_text', False)
+        plain = data.get('plain', False)
         
         # OCR识别
         engine = init_ocr_engine()
-        result = engine.recognize_base64(image_base64)
+        result = engine.recognize_base64(image_base64, extract_text=extract_text)
         
         if extract_text and result.get('code') == 100:
             text = engine.extract_text(result)
+            # 检查是否要求返回原始文本内容（text/plain）
+            if plain:
+                return Response(text, mimetype='text/plain')
             return format_response(
                 success=True,
                 message="识别成功",
@@ -417,13 +427,17 @@ def ocr_url():
         url = data['url']
         timeout = data.get('timeout', 30)
         extract_text = data.get('extract_text', False)
+        plain = data.get('plain', False)
         
         # OCR识别
         engine = init_ocr_engine()
-        result = engine.recognize_url(url, timeout=timeout)
+        result = engine.recognize_url(url, timeout=timeout, extract_text=extract_text)
         
         if extract_text and result.get('code') == 100:
             text = engine.extract_text(result)
+            # 检查是否要求返回原始文本内容（text/plain）
+            if plain:
+                return Response(text, mimetype='text/plain')
             return format_response(
                 success=True,
                 message="识别成功",

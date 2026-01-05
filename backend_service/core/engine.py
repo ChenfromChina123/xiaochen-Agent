@@ -256,12 +256,13 @@ class OCREngine:
         # 调用识别
         return self._run_dict({"image_path": image_path})
     
-    def recognize_bytes(self, image_bytes):
+    def recognize_bytes(self, image_bytes, extract_text=False):
         """
-        识别图片字节流
+        识别内存中的图片字节流
         
         参数:
-            image_bytes: 图片字节流
+            image_bytes: 图片字节数据
+            extract_text: 是否只提取文本（针对Python库版本优化）
             
         返回:
             识别结果字典
@@ -270,16 +271,23 @@ class OCREngine:
             if not self.initialize():
                 return {"code": 901, "data": "OCR引擎未初始化", "score": 0}
         
-        # 转换为base64
-        image_base64 = b64encode(image_bytes).decode('utf-8')
-        return self._run_dict({"image_base64": image_base64})
+        # 将字节流转为base64发送给进程，或者直接传递给 Python 库
+        img_base64 = b64encode(image_bytes).decode('utf-8')
+        cmd_dict = {"image_base64": img_base64}
+        
+        # 如果是 Python 库版本，可以传递 extract_text 参数进行内存优化
+        if self.use_python_lib:
+            cmd_dict["extract_text"] = extract_text
+            
+        return self._run_dict(cmd_dict)
     
-    def recognize_base64(self, image_base64):
+    def recognize_base64(self, image_base64, extract_text=False):
         """
         识别base64编码的图片
         
         参数:
             image_base64: 图片的base64字符串
+            extract_text: 是否只提取文本（针对Python库版本优化）
             
         返回:
             识别结果字典
@@ -288,7 +296,13 @@ class OCREngine:
             if not self.initialize():
                 return {"code": 901, "data": "OCR引擎未初始化", "score": 0}
         
-        return self._run_dict({"image_base64": image_base64})
+        cmd_dict = {"image_base64": image_base64}
+        
+        # 如果是 Python 库版本，可以传递 extract_text 参数进行内存优化
+        if self.use_python_lib:
+            cmd_dict["extract_text"] = extract_text
+            
+        return self._run_dict(cmd_dict)
     
     def _run_dict(self, cmd_dict):
         """
@@ -337,13 +351,16 @@ class OCREngine:
             return {"code": 901, "data": "Python OCR 实例未初始化", "score": 0}
 
         try:
-            # 在执行识别前主动触发垃圾回收，回收上一轮可能残留的内存
+            # 在执行识别前主动触发垃圾回收
             import gc
             gc.collect()
             
             import numpy as np
             from PIL import Image
             import io
+
+            # 是否只提取文本（内存优化模式）
+            extract_text = cmd_dict.get("extract_text", False)
 
             # 获取图像输入
             img_input = None
@@ -357,15 +374,11 @@ class OCREngine:
                 return {"code": 906, "data": "未提供有效的图像输入", "score": 0}
 
             # 执行识别
-            # PaddleOCR 的 ocr 方法在不同版本中对参数支持不同
-            # 由于在初始化时已经设置了 use_angle_cls，这里通常不需要再传 cls 参数
             try:
-                # 优先尝试带 cls 参数（兼容大多数版本）
                 use_cls = cmd_dict.get("cls", self.config.get("cls", False))
                 result = self.ocr_instance.ocr(img_input, cls=use_cls)
             except TypeError as e:
                 if "unexpected keyword argument 'cls'" in str(e):
-                    # 如果不支持 cls 参数，则尝试不带参数调用
                     result = self.ocr_instance.ocr(img_input)
                 else:
                     raise e
@@ -374,9 +387,6 @@ class OCREngine:
             formatted_data = []
             total_score = 0
             
-            # 调试信息
-            # print(f"[调试] OCR 原始结果: {result}")
-
             if result and isinstance(result, list) and len(result) > 0 and result[0] is not None:
                 for line in result[0]:
                     try:
@@ -393,12 +403,19 @@ class OCREngine:
                                 text, score = res[0], 0.0
                         else:
                             text, score = str(res), 0.0
-                            
-                        formatted_data.append({
-                            "text": text,
-                            "box": box,
-                            "score": score
-                        })
+                        
+                        # 如果是 extract_text 模式，我们只保留文本和置信度，不保留坐标信息以节省内存
+                        if extract_text:
+                            formatted_data.append({
+                                "text": text,
+                                "score": score
+                            })
+                        else:
+                            formatted_data.append({
+                                "text": text,
+                                "box": box,
+                                "score": score
+                            })
                         total_score += score
                     except Exception as e:
                         print(f"[警告] 解析 OCR 行数据失败: {e}, 数据内容: {line}")
@@ -407,11 +424,10 @@ class OCREngine:
                 count = len(formatted_data)
                 avg_score = total_score / count if count > 0 else 0
                 
-                # 识别完成后清理临时图像对象，释放内存
+                # 清理
                 del img_input
                 if 'img' in locals():
                     del img
-                import gc
                 gc.collect()
 
                 return {
@@ -429,7 +445,7 @@ class OCREngine:
         except Exception as e:
             return {"code": 905, "data": f"Python OCR 识别异常: {e}", "score": 0}
     
-    def recognize_document(self, doc_path, page_range=None, dpi=200, password="", progress_callback=None, cancel_check=None):
+    def recognize_document(self, doc_path, page_range=None, dpi=200, password="", progress_callback=None, cancel_check=None, extract_text=False):
         """
         识别PDF等文档文件（支持多页）
         
@@ -440,13 +456,14 @@ class OCREngine:
             password: 文档密码（如果需要）
             progress_callback: 进度回调函数，接收参数 (current_page, total_pages, progress_percentage)
             cancel_check: 任务终止检查函数，返回 True 表示需要终止
+            extract_text: 是否只提取文本（如果为True，将减少内存占用，不返回每页的详细坐标信息）
             
         返回:
             识别结果字典: {
                 "code": 状态码,
                 "data": 所有页面的识别结果列表（合并）,
                 "score": 平均置信度,
-                "pages": 每页的详细结果列表
+                "pages": 每页的详细结果列表 (如果 extract_text 为 True，则此项为空)
             }
         """
         if not DOCUMENT_SUPPORT:
@@ -531,12 +548,13 @@ class OCREngine:
                     total_score += result["score"]
                     success_count += 1
                 
-                # 保存每页结果
-                page_result = {
-                    "page": page_num + 1,  # 转回1-based
-                    "result": result
-                }
-                all_results.append(page_result)
+                # 如果不需要提取纯文本，则保存每页详细结果
+                if not extract_text:
+                    page_result = {
+                        "page": page_num + 1,  # 转回1-based
+                        "result": result
+                    }
+                    all_results.append(page_result)
 
                 # 处理完当前页后计算进度
                 processed_count = i + 1
@@ -561,33 +579,25 @@ class OCREngine:
             else:
                 print(f"[进度] 文档识别完成: 100% ({total_to_process}/{total_to_process}页)")
             
-            if all_text_blocks:
-                return {
-                    "code": 100,
-                    "data": all_text_blocks,
-                    "score": avg_score,
-                    "pages": all_results,
-                    "page_count": page_count
-                }
-            else:
-                return {
-                    "code": 101,
-                    "data": [],
-                    "score": 0,
-                    "pages": all_results,
-                    "page_count": page_count
-                }
+            return {
+                "code": 100 if all_text_blocks else 101,
+                "data": all_text_blocks,
+                "score": avg_score,
+                "pages": all_results,
+                "page_count": page_count
+            }
                 
         except Exception as e:
             return {"code": 912, "data": f"文档识别异常: {e}", "score": 0}
     
-    def recognize_url(self, url, timeout=30):
+    def recognize_url(self, url, timeout=30, extract_text=False):
         """
         识别网络图片URL
         
         参数:
             url: 图片URL地址
             timeout: 超时时间（秒）
+            extract_text: 是否只提取文本（针对Python库版本优化）
             
         返回:
             识别结果字典
@@ -604,7 +614,7 @@ class OCREngine:
                 image_bytes = response.read()
             
             # 识别下载的图片
-            result = self.recognize_bytes(image_bytes)
+            result = self.recognize_bytes(image_bytes, extract_text=extract_text)
             result["url"] = url
             return result
             

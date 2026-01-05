@@ -31,16 +31,27 @@ curl http://aistudy.icu/ocr/api/health
 
 ### 2. 识别图片文件
 ```bash
-curl -X POST http://aistudy.icu/ocr/api/ocr/file \
+# 提取文本并以 JSON 格式返回
+curl -X POST http://127.0.0.1:4999/ocr/api/ocr/file \
   -F "file=@test.jpg" \
   -F "extract_text=true"
+
+# 提取文本并以纯文本格式 (text/plain) 直接返回
+curl -X POST http://127.0.0.1:4999/ocr/api/ocr/file \
+  -F "file=@test.jpg" \
+  -F "extract_text=true" \
+  -F "plain=true"
 ```
 
 ### 3. 识别网络图片
 ```bash
-curl -X POST http://aistudy.icu/ocr/api/ocr/url \
+curl -X POST http://127.0.0.1:4999/ocr/api/ocr/url \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://example.com/image.jpg", "extract_text": true}'
+  -d '{
+    "url": "https://example.com/image.jpg", 
+    "extract_text": true,
+    "plain": true
+  }'
 ```
 
 ### 4. 运行完整测试
