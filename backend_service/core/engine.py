@@ -137,7 +137,6 @@ class OCREngine:
                     use_angle_cls=use_angle_cls,
                     lang=lang,
                     use_gpu=False, # 默认 CPU
-                    show_log=False,
                     cpu_threads=cpu_threads,
                     enable_mkldnn=enable_mkldnn,
                     limit_side_len=limit_side_len
