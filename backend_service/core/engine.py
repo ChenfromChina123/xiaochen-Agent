@@ -138,7 +138,9 @@ class OCREngine:
                     use_angle_cls=use_angle_cls,
                     lang=lang,
                     cpu_threads=cpu_threads,
-                    enable_mkldnn=enable_mkldnn
+                    enable_mkldnn=enable_mkldnn,
+                    show_log=False,  # 减少日志输出，节省IO和内存
+                    use_gpu=False    # 强制不使用 GPU，避免驱动问题导致的崩溃
                 )
                 self.use_python_lib = True
                 self.is_initialized = True
@@ -338,6 +340,10 @@ class OCREngine:
             return {"code": 901, "data": "Python OCR 实例未初始化", "score": 0}
 
         try:
+            # 在执行识别前主动触发垃圾回收，回收上一轮可能残留的内存
+            import gc
+            gc.collect()
+            
             import numpy as np
             from PIL import Image
             import io
@@ -404,6 +410,13 @@ class OCREngine:
                 count = len(formatted_data)
                 avg_score = total_score / count if count > 0 else 0
                 
+                # 识别完成后清理临时图像对象，释放内存
+                del img_input
+                if 'img' in locals():
+                    del img
+                import gc
+                gc.collect()
+
                 return {
                     "code": 100,
                     "data": formatted_data,
@@ -505,8 +518,16 @@ class OCREngine:
                 # 转换为字节流
                 img_bytes = pix.tobytes("png")
                 
-                # OCR识别
+                # 释放 Pixmap 内存
+                del pix
+                
+                # 识别页面
                 result = self.recognize_bytes(img_bytes)
+                
+                # 释放字节流内存
+                del img_bytes
+                import gc
+                gc.collect()
                 
                 if result["code"] == 100:
                     all_text_blocks.extend(result["data"])

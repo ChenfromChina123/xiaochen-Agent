@@ -6,6 +6,6 @@
     "enable_mkldnn": false,
     "cls": false,
     "use_python_lib": true,
-    "max_upload_size_mb": 10
+    "max_upload_size_mb": 5
 }
 
