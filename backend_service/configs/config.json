@@ -2,9 +2,10 @@
     "exe_path": "../core/paddleocr_engine/PaddleOCR-json.exe",
     "models_path": "../core/paddleocr_engine/models",
     "language": "models/config_chinese.txt",
-    "cpu_threads": 4,
-    "enable_mkldnn": true,
+    "cpu_threads": 1,
+    "enable_mkldnn": false,
     "cls": false,
+    "use_python_lib": true,
     "limit_side_len": 4320,
     "document_dpi": 200,
     "use_python_lib": false
