@@ -133,14 +133,12 @@ class OCREngine:
                 enable_mkldnn = self.config.get("enable_mkldnn", False)
                 
                 # 显式传递内存优化参数
+                # 注意：PaddleOCR 构造函数不支持 use_gpu 参数，需通过其他方式或保持默认
                 self.ocr_instance = PaddleOCR(
                     use_angle_cls=use_angle_cls,
                     lang=lang,
                     cpu_threads=cpu_threads,
-                    enable_mkldnn=enable_mkldnn,
-                    use_gpu=False,
-                    ir_optim=False,
-                    enable_tensorrt=False
+                    enable_mkldnn=enable_mkldnn
                 )
                 self.use_python_lib = True
                 self.is_initialized = True
