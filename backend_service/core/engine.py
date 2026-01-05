@@ -371,16 +371,35 @@ class OCREngine:
             formatted_data = []
             total_score = 0
             
-            if result and result[0]:
+            # 调试信息
+            # print(f"[调试] OCR 原始结果: {result}")
+
+            if result and isinstance(result, list) and len(result) > 0 and result[0] is not None:
                 for line in result[0]:
-                    box = line[0]
-                    text, score = line[1]
-                    formatted_data.append({
-                        "text": text,
-                        "box": box,
-                        "score": score
-                    })
-                    total_score += score
+                    try:
+                        if not isinstance(line, list) or len(line) < 2:
+                            continue
+                            
+                        box = line[0]
+                        res = line[1]
+                        
+                        if isinstance(res, tuple) or isinstance(res, list):
+                            if len(res) >= 2:
+                                text, score = res[0], res[1]
+                            else:
+                                text, score = res[0], 0.0
+                        else:
+                            text, score = str(res), 0.0
+                            
+                        formatted_data.append({
+                            "text": text,
+                            "box": box,
+                            "score": score
+                        })
+                        total_score += score
+                    except Exception as e:
+                        print(f"[警告] 解析 OCR 行数据失败: {e}, 数据内容: {line}")
+                        continue
                 
                 count = len(formatted_data)
                 avg_score = total_score / count if count > 0 else 0
