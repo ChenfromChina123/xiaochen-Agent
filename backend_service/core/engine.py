@@ -136,7 +136,6 @@ class OCREngine:
                 self.ocr_instance = PaddleOCR(
                     use_angle_cls=use_angle_cls,
                     lang=lang,
-                    use_gpu=False, # 默认 CPU
                     cpu_threads=cpu_threads,
                     enable_mkldnn=enable_mkldnn
                 )
