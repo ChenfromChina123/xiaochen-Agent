@@ -7,6 +7,8 @@ class Config:
     apiKey: str
     baseUrl: str
     modelName: str
+    logsDir: str = "logs"
+    storageDir: str = "storage"
     maxCycles: int = 30
     tokenThreshold: int = 30000
     stopAfterFirstToolExecution: bool = False

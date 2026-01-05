@@ -98,11 +98,12 @@ python -m xiaochen_agent_v2
   "api_key": "your_api_key_here",
   "base_url": "https://api.deepseek.com",
   "model_name": "deepseek-chat",
-  "verify_ssl": true,
-  "auto_save_session": false,
-  "max_cycles": 30
+  "logs_dir": "logs",
+  "storage_dir": "storage"
 }
 ```
+
+*注意：`logs_dir` 和 `storage_dir` 支持相对路径（相对于程序根目录）或绝对路径。*
 
 **方式 B：使用环境变量**
 

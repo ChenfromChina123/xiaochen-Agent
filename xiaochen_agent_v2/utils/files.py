@@ -11,6 +11,7 @@ DEFAULT_MAX_READ_CHARS = 20000
 
 
 import sys
+import json
 
 def get_repo_root() -> str:
     """获取项目的根目录。如果是打包后的 EXE，则返回 EXE 所在的目录。"""
@@ -23,7 +24,41 @@ def get_repo_root() -> str:
 
 
 def get_logs_root() -> str:
-    return os.path.join(get_repo_root(), "logs")
+    """获取日志根目录，支持从 config.json 读取自定义路径"""
+    root = get_repo_root()
+    config_path = os.path.join(root, "config.json")
+    logs_dir = "logs"
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                logs_dir = config.get("logs_dir", "logs")
+        except Exception:
+            pass
+            
+    if os.path.isabs(logs_dir):
+        return logs_dir
+    return os.path.join(root, logs_dir)
+
+
+def get_storage_root() -> str:
+    """获取存储根目录，支持从 config.json 读取自定义路径"""
+    root = get_repo_root()
+    config_path = os.path.join(root, "config.json")
+    storage_dir = "storage"
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                storage_dir = config.get("storage_dir", "storage")
+        except Exception:
+            pass
+            
+    if os.path.isabs(storage_dir):
+        return storage_dir
+    return os.path.join(root, storage_dir)
 
 
 def get_sessions_dir() -> str:

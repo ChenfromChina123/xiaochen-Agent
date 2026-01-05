@@ -18,6 +18,8 @@ class ConfigManager:
         "model_name": "deepseek-chat",
         "verify_ssl": True,
         "auto_save_session": False,
+        "logs_dir": "logs",
+        "storage_dir": "storage",
         "max_cycles": 30,
         "token_threshold": 30000,
         "whitelisted_tools": [

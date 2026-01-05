@@ -14,15 +14,26 @@ import threading
 import time
 from typing import Dict, Any, Optional
 
+# 导入清理工具与路径工具
+try:
+    from ..utils.files import prune_directory, get_storage_root, get_repo_root
+except (ImportError, ValueError):
+    prune_directory = None
+    def get_storage_root():
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(current_dir, "storage")
+    def get_repo_root():
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # OCR backend_service 配置加载
 def _load_config():
     """从 ocr_config.json 加载配置，如果失败则使用默认值"""
     default_server_url = "http://localhost:5000"
-    default_storage_dir = "storage/ocr_results"
+    default_storage_dir = "ocr_results" # 默认相对于 get_storage_root()
     
-    # 尝试找到项目根目录下的 ocr_config.json
-    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    config_path = os.path.join(current_dir, "ocr_config.json")
+    repo_root = get_repo_root()
+    storage_root = get_storage_root()
+    config_path = os.path.join(repo_root, "ocr_config.json")
     
     server_url = default_server_url
     storage_relative_path = default_storage_dir
@@ -39,7 +50,7 @@ def _load_config():
             print(f"  [OCR警告] 无法加载配置文件 {config_path}: {e}")
     else:
         # 如果 ocr_config.json 不存在，尝试从 config.json 读取 (向后兼容)
-        main_config_path = os.path.join(current_dir, "config.json")
+        main_config_path = os.path.join(repo_root, "config.json")
         if os.path.exists(main_config_path):
             try:
                 with open(main_config_path, 'r', encoding='utf-8') as f:
@@ -55,17 +66,17 @@ def _load_config():
     if os.path.isabs(storage_relative_path):
         abs_storage_dir = storage_relative_path
     else:
-        abs_storage_dir = os.path.join(current_dir, storage_relative_path)
+        # 如果是相对路径，且包含 "storage/" 前缀，则尝试去除它并基于 storage_root
+        if storage_relative_path.startswith("storage/"):
+            storage_relative_path = storage_relative_path[len("storage/"):]
+        elif storage_relative_path.startswith("storage\\"):
+            storage_relative_path = storage_relative_path[len("storage\\"):]
+            
+        abs_storage_dir = os.path.join(storage_root, storage_relative_path)
         
     return server_url, abs_storage_dir, max_storage_files
 
 OCR_SERVER_URL, STORAGE_DIR, MAX_STORAGE_FILES = _load_config()
-
-# 导入清理工具
-try:
-    from ..utils.files import prune_directory
-except (ImportError, ValueError):
-    prune_directory = None
 
 if not os.path.exists(STORAGE_DIR):
     os.makedirs(STORAGE_DIR, exist_ok=True)
