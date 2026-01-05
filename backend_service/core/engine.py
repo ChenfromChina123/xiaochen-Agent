@@ -165,7 +165,7 @@ class OCREngine:
                         "lang": lang,
                         "cpu_threads": cpu_threads,
                         "enable_mkldnn": enable_mkldnn,
-                        "use_gpu": False,  # 强制禁用 GPU
+                        # "use_gpu": False,  # 部分版本不支持此参数，PaddleOCR 默认会自动检测
                     }
                     
                     # 如果找到了本地模型路径，则添加进去
