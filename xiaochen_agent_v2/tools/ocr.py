@@ -16,13 +16,13 @@ from typing import Dict, Any, Optional
 
 # OCR backend_service 配置加载
 def _load_config():
-    """从 config.json 加载配置，如果失败则使用默认值"""
+    """从 ocr_config.json 加载配置，如果失败则使用默认值"""
     default_server_url = "http://localhost:5000"
     default_storage_dir = "storage/ocr_results"
     
-    # 尝试找到项目根目录下的 config.json
+    # 尝试找到项目根目录下的 ocr_config.json
     current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    config_path = os.path.join(current_dir, "config.json")
+    config_path = os.path.join(current_dir, "ocr_config.json")
     
     server_url = default_server_url
     storage_relative_path = default_storage_dir
@@ -37,6 +37,19 @@ def _load_config():
                 max_storage_files = config_data.get("ocr_max_storage_files", 50)
         except Exception as e:
             print(f"  [OCR警告] 无法加载配置文件 {config_path}: {e}")
+    else:
+        # 如果 ocr_config.json 不存在，尝试从 config.json 读取 (向后兼容)
+        main_config_path = os.path.join(current_dir, "config.json")
+        if os.path.exists(main_config_path):
+            try:
+                with open(main_config_path, 'r', encoding='utf-8') as f:
+                    config_data = json.load(f)
+                    if "ocr_server_url" in config_data:
+                        server_url = config_data.get("ocr_server_url", default_server_url)
+                        storage_relative_path = config_data.get("ocr_storage_dir", default_storage_dir)
+                        max_storage_files = config_data.get("ocr_max_storage_files", 50)
+            except Exception:
+                pass
             
     # 计算存储目录的绝对路径
     if os.path.isabs(storage_relative_path):

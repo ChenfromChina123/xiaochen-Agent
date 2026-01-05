@@ -2,9 +2,6 @@
   "api_key": "",
   "base_url": "https://api.deepseek.com",
   "model_name": "deepseek-chat",
-  "ocr_server_url": "http://localhost:5000",
-  "ocr_storage_dir": "storage/ocr_results",
-  "ocr_max_storage_files": 50,
   "verify_ssl": true,
   "auto_save_session": false,
   "max_cycles": 30

@@ -7,9 +7,6 @@ class Config:
     apiKey: str
     baseUrl: str
     modelName: str
-    ocrServerUrl: str = "http://localhost:5000"
-    ocrStorageDir: str = "storage/ocr_results"
-    ocrMaxStorageFiles: int = 50
     maxCycles: int = 30
     tokenThreshold: int = 30000
     stopAfterFirstToolExecution: bool = False
