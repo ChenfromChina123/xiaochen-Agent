@@ -5,6 +5,7 @@
     "cpu_threads": 1,
     "enable_mkldnn": false,
     "cls": false,
-    "use_python_lib": true
+    "use_python_lib": true,
+    "max_upload_size_mb": 10
 }
 

@@ -76,6 +76,8 @@ python api/server.py
 - `POST /api/ocr/url` - 识别网络图片
 - `POST /api/ocr/document` - 识别PDF文档
 - `POST /api/ocr/batch` - 批量识别
+- `GET /api/progress/<task_id>` - 获取任务进度
+- `POST /api/ocr/terminate/<task_id>` - 终止任务
 - `GET /api/status` - 服务状态
 - `GET /api/health` - 健康检查
 

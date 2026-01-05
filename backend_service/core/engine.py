@@ -419,7 +419,7 @@ class OCREngine:
         except Exception as e:
             return {"code": 905, "data": f"Python OCR 识别异常: {e}", "score": 0}
     
-    def recognize_document(self, doc_path, page_range=None, dpi=200, password="", progress_callback=None):
+    def recognize_document(self, doc_path, page_range=None, dpi=200, password="", progress_callback=None, cancel_check=None):
         """
         识别PDF等文档文件（支持多页）
         
@@ -429,6 +429,7 @@ class OCREngine:
             dpi: 渲染DPI，影响图片质量和识别准确度，默认200
             password: 文档密码（如果需要）
             progress_callback: 进度回调函数，接收参数 (current_page, total_pages, progress_percentage)
+            cancel_check: 任务终止检查函数，返回 True 表示需要终止
             
         返回:
             识别结果字典: {
@@ -484,6 +485,16 @@ class OCREngine:
                 progress_callback(0, total_to_process, 0)
 
             for i, page_num in enumerate(pages_to_process):
+                # 检查是否需要终止任务
+                if cancel_check and cancel_check():
+                    print(f"[引擎] 识别任务已收到终止指令，正在停止...")
+                    return {
+                        "code": 102,
+                        "data": "任务已终止",
+                        "score": 0,
+                        "pages": all_results
+                    }
+                
                 page = doc[page_num]
                 
                 # 将页面渲染为图片

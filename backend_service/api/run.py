@@ -13,6 +13,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, Blueprint
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import RequestEntityTooLarge
 
 # 添加项目根目录到路径
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,10 +30,36 @@ CORS(app)  # 允许跨域请求
 ocr_bp = Blueprint('ocr', __name__)
 
 # 配置
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 最大50MB
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
 # 使用绝对路径加载配置文件
 app.config['OCR_CONFIG'] = os.path.join(BASE_DIR, 'configs', 'config.json')
+
+# 加载配置并设置上传限制
+def load_upload_limit():
+    try:
+        with open(app.config['OCR_CONFIG'], 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            limit_mb = config.get('max_upload_size_mb', 10)
+            app.config['MAX_CONTENT_LENGTH'] = limit_mb * 1024 * 1024
+            print(f"[服务器] 设置最大上传限制: {limit_mb}MB")
+    except Exception as e:
+        print(f"[警告] 加载上传限制失败，使用默认值 10MB: {e}")
+        app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+
+load_upload_limit()
+
+@app.errorhandler(413)
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_too_large(e):
+    """
+    处理文件超限错误
+    """
+    limit_mb = app.config.get('MAX_CONTENT_LENGTH', 0) // (1024 * 1024)
+    return format_response(
+        success=False,
+        code=413,
+        message=f"上传文件太大。当前服务器限制最大上传大小为 {limit_mb}MB。"
+    )
 
 # 允许的文件扩展名
 ALLOWED_EXTENSIONS = {
@@ -91,6 +118,9 @@ PROGRESS_DIR = os.path.join(tempfile.gettempdir(), "ocr_progress")
 if not os.path.exists(PROGRESS_DIR):
     os.makedirs(PROGRESS_DIR, exist_ok=True)
 
+# 被终止的任务列表
+cancelled_tasks = set()
+
 def update_task_progress(task_id, current, total, percentage):
     """更新任务进度到临时文件"""
     if not task_id:
@@ -121,6 +151,13 @@ def get_progress(task_id):
         except:
             pass
     return format_response(success=False, message="任务不存在或进度不可用")
+
+@ocr_bp.route('/api/ocr/terminate/<task_id>', methods=['POST'])
+def terminate_task(task_id):
+    """终止指定的OCR任务"""
+    cancelled_tasks.add(task_id)
+    print(f"[服务器] 已记录终止指令: {task_id}")
+    return format_response(success=True, message=f"已发出任务 {task_id} 的终止指令")
 
 @ocr_bp.route('/')
 def index():
@@ -467,7 +504,22 @@ def ocr_document():
                 if task_id:
                     update_task_progress(task_id, current, total, percentage)
             
-            result = engine.recognize_document(temp_path, page_range=page_range, dpi=dpi, password=password, progress_callback=progress_callback)
+            # 定义取消检查函数
+            def cancel_check():
+                return task_id and task_id in cancelled_tasks
+            
+            result = engine.recognize_document(
+                temp_path, 
+                page_range=page_range, 
+                dpi=dpi, 
+                password=password, 
+                progress_callback=progress_callback,
+                cancel_check=cancel_check
+            )
+            
+            # 任务结束（正常或终止），清理状态
+            if task_id and task_id in cancelled_tasks:
+                cancelled_tasks.remove(task_id)
             
             # 完成后清理进度文件
             if task_id:
@@ -555,6 +607,12 @@ def ocr_batch():
 
             # 收集文件并识别
             for i, file in enumerate(files):
+                # 检查任务是否被终止
+                if task_id and task_id in cancelled_tasks:
+                    print(f"[服务器] 批量任务 {task_id} 已终止")
+                    cancelled_tasks.remove(task_id)
+                    break
+
                 if file.filename == '':
                     continue
                 

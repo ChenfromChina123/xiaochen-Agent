@@ -1,4 +1,4 @@
-﻿# OCR backend_service API鏂囨。
+# OCR backend_service API鏂囨。
 
 ## 姒傝堪
 
@@ -393,7 +393,60 @@ print(response.json())
 
 ---
 
-## 閿欒鐮佽鏄?
+### 9. 获取进度
+
+**接口**: `GET /api/progress/<task_id>`
+
+**说明**: 获取指定 `task_id` 的任务处理进度。
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "data": {
+    "task_id": "uuid-12345",
+    "current": 5,
+    "total": 10,
+    "percentage": 50,
+    "timestamp": 1704445200.0
+  }
+}
+```
+
+---
+
+### 10. 终止任务
+
+**接口**: `POST /api/ocr/terminate/<task_id>`
+
+**说明**: 强制终止指定的 OCR 任务。
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "已发出任务 uuid-12345 的终止指令"
+}
+```
+
+---
+
+### 11. 配置限制
+
+**上传限制**: 服务器默认限制上传文件大小。当前配置为 `10MB`（可在 `config.json` 中通过 `max_upload_size_mb` 修改）。
+
+如果超过限制，将返回 `413 Request Entity Too Large` 错误：
+```json
+{
+  "success": false,
+  "code": 413,
+  "message": "上传文件太大。当前服务器限制最大上传大小为 10MB。"
+}
+```
+
+---
+
+## 错误代码对照表
 | 閿欒鐮?| 璇存槑 |
 |--------|------|
 | 200 | 鎴愬姛 |
