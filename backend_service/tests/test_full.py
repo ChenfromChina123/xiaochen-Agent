@@ -5,17 +5,16 @@
 import sys
 import os
 
-# 获取脚本所在目录（ocr_core目录）
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 获取项目根目录
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# 切换到脚本所在目录
-os.chdir(SCRIPT_DIR)
+# 添加项目根目录到路径
+sys.path.insert(0, BASE_DIR)
 
-# 添加当前目录到路径
-sys.path.insert(0, SCRIPT_DIR)
+from core.engine import OCREngine
 
-from ocr_engine import OCREngine
-
+# 配置文件路径
+CONFIG_PATH = os.path.join(BASE_DIR, "configs", "config.json")
 
 def test_api_methods():
     """测试所有API方法"""
@@ -24,7 +23,7 @@ def test_api_methods():
     print("=" * 60)
     
     try:
-        engine = OCREngine("config.json")
+        engine = OCREngine(CONFIG_PATH)
         
         # 测试方法是否存在
         methods = [
@@ -66,7 +65,7 @@ def test_config_loading():
     
     try:
         # 测试默认配置
-        engine = OCREngine("config.json")
+        engine = OCREngine(CONFIG_PATH)
         config = engine.config
         
         required_keys = ['exe_path', 'models_path', 'language', 'cpu_threads']
@@ -94,7 +93,7 @@ def test_error_handling():
     print("=" * 60)
     
     try:
-        with OCREngine("config.json") as engine:
+        with OCREngine(CONFIG_PATH) as engine:
             # 测试不存在的文件
             result = engine.recognize_image("nonexistent_file.jpg")
             
@@ -132,7 +131,7 @@ def test_extract_text():
     print("=" * 60)
     
     try:
-        engine = OCREngine("config.json")
+        engine = OCREngine(CONFIG_PATH)
         
         # 模拟识别结果
         mock_result_success = {
@@ -183,18 +182,18 @@ def test_directory_structure():
     print("=" * 60)
     
     required_files = [
-        "ocr_engine.py",
-        "config.json",
-        "__init__.py",
-        "example.py",
-        "test_simple.py",
-        "API_GUIDE.txt",
-        "README.md",
-        "paddleocr_engine/PaddleOCR-json.exe",
-        "paddleocr_engine/models/config_chinese.txt",
-        "paddleocr_engine/models/config_en.txt",
-        "paddleocr_engine/models/ch_PP-OCRv3_det_infer/inference.pdmodel",
-        "paddleocr_engine/models/ch_PP-OCRv3_rec_infer/inference.pdmodel",
+        os.path.join(BASE_DIR, "core", "engine.py"),
+        CONFIG_PATH,
+        os.path.join(BASE_DIR, "core", "__init__.py"),
+        os.path.join(BASE_DIR, "tests", "example.py"),
+        os.path.join(BASE_DIR, "tests", "test_simple.py"),
+        os.path.join(BASE_DIR, "docs", "API_GUIDE.txt"),
+        os.path.join(BASE_DIR, "docs", "README.md"),
+        os.path.join(BASE_DIR, "core", "paddleocr_engine", "PaddleOCR-json.exe"),
+        os.path.join(BASE_DIR, "core", "paddleocr_engine", "models", "config_chinese.txt"),
+        os.path.join(BASE_DIR, "core", "paddleocr_engine", "models", "config_en.txt"),
+        os.path.join(BASE_DIR, "core", "paddleocr_engine", "models", "ch_PP-OCRv3_det_infer/inference.pdmodel"),
+        os.path.join(BASE_DIR, "core", "paddleocr_engine", "models", "ch_PP-OCRv3_rec_infer/inference.pdmodel"),
     ]
     
     all_exist = True

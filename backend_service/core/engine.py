@@ -40,13 +40,12 @@ class OCREngine:
         ".fb2", ".cbz", ".oxps"
     ]
     
-    # 所有支持的格式
-    @property
-    def SUPPORTED_FORMATS(self):
+    @classmethod
+    def get_supported_formats(cls):
         """返回所有支持的文件格式"""
-        formats = self.SUPPORTED_IMAGE_FORMATS.copy()
+        formats = cls.SUPPORTED_IMAGE_FORMATS.copy()
         if DOCUMENT_SUPPORT:
-            formats.extend(self.SUPPORTED_DOC_FORMATS)
+            formats.extend(cls.SUPPORTED_DOC_FORMATS)
         return formats
     
     def __init__(self, config_path="config.json"):

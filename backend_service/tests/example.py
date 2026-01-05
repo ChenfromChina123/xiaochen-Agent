@@ -6,7 +6,15 @@ OCR引擎使用示例
 
 import os
 import sys
-from ocr_engine import OCREngine
+
+# 添加项目根目录到路径
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
+
+from core.engine import OCREngine
+
+# 配置文件路径
+CONFIG_PATH = os.path.join(BASE_DIR, "configs", "config.json")
 
 
 def example_basic():
@@ -16,7 +24,7 @@ def example_basic():
     print("=" * 50)
     
     # 创建OCR引擎实例
-    engine = OCREngine("config.json")
+    engine = OCREngine(CONFIG_PATH)
     
     # 初始化引擎
     if not engine.initialize():
@@ -61,7 +69,7 @@ def example_with_statement():
     
     if os.path.exists(image_path):
         # 使用 with 语句，自动初始化和关闭
-        with OCREngine("config.json") as engine:
+        with OCREngine(CONFIG_PATH) as engine:
             result = engine.recognize_image(image_path)
             
             if result['code'] == 100:
@@ -93,7 +101,7 @@ def example_batch():
         print("没有找到测试图片")
         return
     
-    with OCREngine("config.json") as engine:
+    with OCREngine(CONFIG_PATH) as engine:
         results = engine.batch_recognize(existing_paths)
         
         for result in results:

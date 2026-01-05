@@ -9,23 +9,30 @@
 使用JSON配置文件管理参数，提供简洁的输入输出接口。
 
 【目录结构】
-ocr_core/                       # 完全独立的OCR核心模块
-  ├── paddleocr_engine/         # 内置OCR引擎（约200MB）
-  │   ├── PaddleOCR-json.exe   # 引擎可执行文件
-  │   ├── models/               # 模型文件夹
-  │   └── *.dll                 # 依赖库
-  ├── __init__.py               # 包初始化文件
-  ├── ocr_engine.py             # 核心引擎类
-  ├── config.json               # 配置文件
-  ├── example.py                # 完整使用示例
-  ├── test_simple.py            # 简单测试脚本
-  ├── API_GUIDE.txt             # 本文件
-  └── README.md                 # 说明文档
+backend_service/               # OCR 后端服务分层架构
+  ├── api/                    # API 接口层
+  │   └── server.py           # Flask 服务器主入口
+  ├── core/                   # 核心引擎层
+  │   ├── engine.py           # OCR 引擎核心逻辑 (原 ocr_engine.py)
+  │   ├── paddleocr_engine/   # 内置 OCR 引擎
+  │   └── ...                 # 依赖库
+  ├── configs/                # 配置层
+  │   └── config.json         # 配置文件
+  ├── scripts/                # 脚本层
+  │   ├── start_server.bat    # Windows 启动脚本
+  │   └── start_server.sh     # Linux 启动脚本
+  ├── tests/                  # 测试层
+  │   ├── test_simple.py      # 基础功能测试
+  │   ├── test_full.py        # 完整功能测试
+  │   └── ...                 # 其他示例
+  ├── docs/                   # 文档层
+  │   └── ...                 # 本文件及其他文档
+  └── requirements.txt        # 依赖列表
 
 【快速开始】
-1. 确保配置文件 config.json 中的路径正确
-2. 导入模块: from ocr_core import OCREngine
-3. 创建实例: engine = OCREngine("config.json")
+1. 确保配置文件 configs/config.json 中的路径正确
+2. 导入模块: from core.engine import OCREngine
+3. 创建实例: engine = OCREngine("configs/config.json")
 4. 初始化: engine.initialize()
 5. 识别图片: result = engine.recognize_image("image.jpg")
 6. 关闭引擎: engine.close()
@@ -38,10 +45,10 @@ ocr_core/                       # 完全独立的OCR核心模块
 OCR识别引擎核心类，封装了PaddleOCR-json引擎的调用。
 
 【构造函数】
-OCREngine(config_path="config.json")
+OCREngine(config_path="configs/config.json")
     
     参数:
-        config_path (str): 配置文件路径，默认为 "config.json"
+        config_path (str): 配置文件路径，默认为 "configs/config.json"
     
     返回:
         OCREngine实例

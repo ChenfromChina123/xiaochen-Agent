@@ -31,7 +31,7 @@ OCR核心模块 - 最小化可复用OCR识别组件
 版本: 1.0.0
 """
 
-from .ocr_engine import OCREngine
+from .engine import OCREngine
 
 __version__ = "1.0.0"
 __all__ = ["OCREngine"]

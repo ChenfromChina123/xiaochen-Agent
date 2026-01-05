@@ -12,10 +12,16 @@
 | `cpp_projects/` | C++示例项目和代码 |
 | `python_snake_game/` | Python版贪吃蛇游戏实现 |
 | `snake_game/` | 网页版贪吃蛇游戏 |
+| `backend_service/` | **OCR 后端服务 (分层架构)** |
+| &nbsp;&nbsp;├── `api/` | API 接口层 (server.py) |
+| &nbsp;&nbsp;├── `core/` | 核心引擎层 (PaddleOCR-json) |
+| &nbsp;&nbsp;├── `configs/` | 配置文件 (config.json) |
+| &nbsp;&nbsp;├── `scripts/` | 启动脚本 (start_server.bat) |
+| &nbsp;&nbsp;├── `tests/` | 测试代码 |
+| &nbsp;&nbsp;└── `docs/` | 文档说明 |
 | `xiaochen_agent_v2/` | 小晨智能体V2核心模块 (分层架构) |
 | &nbsp;&nbsp;├── `core/` | 核心逻辑 (智能体, 配置, 会话) |
 | &nbsp;&nbsp;├── `tools/` | 外部工具集成 (OCR, 搜索, 网页访问) |
-| &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└── `ocr_core/` | OCR 核心引擎 (基于 PaddleOCR-json) |
 | &nbsp;&nbsp;├── `ui/` | 界面逻辑 (CLI) |
 | &nbsp;&nbsp;├── `utils/` | 工具类 (控制台, 文件操作) |
 | &nbsp;&nbsp;└── `scripts/` | 安装与启动脚本 |

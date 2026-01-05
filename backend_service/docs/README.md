@@ -31,7 +31,7 @@
 此模块是**完全独立**的，包含所有必需的文件：
 
 1. **直接使用**：无需任何配置，开箱即用
-2. **复制部署**：将整个 `ocr_core` 文件夹复制到任意位置即可
+2. **复制部署**：将整个 `backend_service` 文件夹复制到任意位置即可
 3. **无外部依赖**：不依赖父项目的任何文件
 4. **跨项目使用**：可以集成到任何 Python 项目中
 5. **backend_service**：可一键启动为HTTP REST API服务
@@ -41,36 +41,31 @@
 #### 方式1：作为Python库使用（推荐）
 
 ```bash
-# 直接使用
-cd ocr_core
-python test_simple.py
-
-# 复制到其他项目
-cp -r ocr_core /path/to/your/project/
-cd /path/to/your/project/ocr_core
-python example.py
+# 直接运行测试
+cd backend_service
+python tests/test_simple.py
 
 # 作为Python包导入
 import sys
-sys.path.append('/path/to/ocr_core')
-from ocr_engine import OCREngine
+sys.path.append('/path/to/backend_service')
+from core.engine import OCREngine
 ```
 
-#### 方式2：作为 backend_service 部署（新增）
+#### 方式2：作为 backend_service 部署
 
 本模块现已支持作为HTTP REST API服务运行，支持跨语言调用：
 
 ```bash
 # Windows：双击启动
-start_server.bat
+scripts/start_server.bat
 
 # Linux/Mac：命令行启动
-./start_server.sh
+scripts/start_server.sh
 
 # 或直接运行
-cd ocr_core
-pip install -r requirements_server.txt
-python ocr_server.py
+cd backend_service
+pip install -r requirements.txt
+python api/server.py
 ```
 
 服务启动后访问：`http://localhost:5000`

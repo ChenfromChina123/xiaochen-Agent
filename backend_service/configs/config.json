@@ -1,6 +1,6 @@
 {
-    "exe_path": "paddleocr_engine/PaddleOCR-json.exe",
-    "models_path": "paddleocr_engine/models",
+    "exe_path": "../core/paddleocr_engine/PaddleOCR-json.exe",
+    "models_path": "../core/paddleocr_engine/models",
     "language": "models/config_chinese.txt",
     "cpu_threads": 4,
     "enable_mkldnn": true,

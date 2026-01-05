@@ -6,7 +6,15 @@
 
 import os
 import sys
-from ocr_engine import OCREngine
+
+# 添加项目根目录到路径
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
+
+from core.engine import OCREngine
+
+# 配置文件路径
+CONFIG_PATH = os.path.join(BASE_DIR, "configs", "config.json")
 
 
 def test_initialization():
@@ -14,10 +22,10 @@ def test_initialization():
     print("【测试1】引擎初始化测试")
     print("-" * 40)
     
-    engine = OCREngine("config.json")
+    engine = OCREngine(CONFIG_PATH)
     
     # 检查配置加载
-    print(f"配置文件路径: config.json")
+    print(f"配置文件路径: {CONFIG_PATH}")
     print(f"OCR引擎路径: {engine.config.get('exe_path')}")
     print(f"模型路径: {engine.config.get('models_path')}")
     print(f"语言配置: {engine.config.get('language')}")
@@ -47,7 +55,7 @@ def test_recognition(image_path):
     
     print(f"测试图片: {image_path}")
     
-    with OCREngine("config.json") as engine:
+    with OCREngine(CONFIG_PATH) as engine:
         result = engine.recognize_image(image_path)
         
         print(f"状态码: {result['code']}")
@@ -82,7 +90,7 @@ def test_format_support():
     print(f"\n【测试3】支持的图片格式")
     print("-" * 40)
     
-    formats = OCREngine.SUPPORTED_FORMATS
+    formats = OCREngine.get_supported_formats()
     print(f"支持的格式数量: {len(formats)}")
     print(f"支持的格式: {', '.join(formats)}")
     

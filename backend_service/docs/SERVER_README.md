@@ -4,20 +4,20 @@
 
 ### Windows
 ```bash
-双击运行: start_server.bat
+双击运行: scripts/start_server.bat
 ```
 
 ### Linux/Mac
 ```bash
-chmod +x start_server.sh
-./start_server.sh
+chmod +x scripts/start_server.sh
+./scripts/start_server.sh
 ```
 
 ### 手动启动
 ```bash
-cd ocr_core
-pip install -r requirements_server.txt
-python ocr_server.py
+cd backend_service
+pip install -r requirements.txt
+python api/server.py
 ```
 
 服务将在 `http://localhost:5000` 启动
@@ -45,7 +45,7 @@ curl -X POST http://localhost:5000/api/ocr/url \
 
 ### 4. 运行完整测试
 ```bash
-python test_server.py
+python tests/test_server.py
 ```
 
 ## 🔧 主要接口

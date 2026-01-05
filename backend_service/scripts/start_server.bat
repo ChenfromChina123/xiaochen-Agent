@@ -5,7 +5,7 @@ echo OCR识别服务启动脚本
 echo ============================================
 echo.
 
-cd /d %~dp0
+cd /d %~dp0\..
 
 echo [1] 检查Python环境...
 python --version
@@ -20,7 +20,7 @@ echo [2] 检查依赖包...
 pip show Flask >nul 2>&1
 if errorlevel 1 (
     echo [警告] 未找到Flask，正在安装依赖...
-    pip install -r requirements_server.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+    pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
     if errorlevel 1 (
         echo [错误] 依赖安装失败
         pause
@@ -33,7 +33,7 @@ echo.
 
 echo [3] 启动OCR服务...
 echo.
-python ocr_server.py
+python api/server.py
 
 pause
 

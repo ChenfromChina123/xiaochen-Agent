@@ -14,10 +14,11 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
-# 添加当前目录到路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# 添加项目根目录到路径
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 
-from ocr_engine import OCREngine
+from core.engine import OCREngine
 
 # ==================== 配置 ====================
 
@@ -27,9 +28,8 @@ CORS(app)  # 允许跨域请求
 # 配置
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 最大50MB
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
-# 使用绝对路径加载配置文件，避免工作目录不同导致加载错误
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-app.config['OCR_CONFIG'] = os.path.join(BASE_DIR, 'config.json')
+# 使用绝对路径加载配置文件
+app.config['OCR_CONFIG'] = os.path.join(BASE_DIR, 'configs', 'config.json')
 
 # 允许的文件扩展名
 ALLOWED_EXTENSIONS = {
@@ -97,7 +97,7 @@ def index():
         data={
             'service': 'OCR Recognition Service',
             'version': '1.0.0',
-            'supported_formats': engine.SUPPORTED_FORMATS,
+            'supported_formats': engine.get_supported_formats(),
             'endpoints': {
                 'POST /api/ocr/file': '识别上传的文件',
                 'POST /api/ocr/base64': '识别base64图片',
