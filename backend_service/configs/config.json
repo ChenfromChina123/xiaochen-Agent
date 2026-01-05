@@ -6,6 +6,7 @@
     "enable_mkldnn": true,
     "cls": false,
     "limit_side_len": 4320,
-    "document_dpi": 200
+    "document_dpi": 200,
+    "use_python_lib": false
 }
 

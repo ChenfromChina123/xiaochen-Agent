@@ -28,7 +28,7 @@ class TestOCRBackendFull(unittest.TestCase):
         
         # 验证服务是否在线
         try:
-            res = requests.get("http://localhost:5000/api/health", timeout=5)
+            res = requests.get("http://localhost:4999/api/health", timeout=5)
             if res.status_code != 200:
                 raise Exception("OCR 服务响应异常")
         except Exception as e:
@@ -37,7 +37,7 @@ class TestOCRBackendFull(unittest.TestCase):
     def test_01_health_check(self):
         """测试服务健康检查"""
         print("\n[Test] 检查服务健康状态...")
-        res = requests.get("http://localhost:5000/api/health")
+        res = requests.get("http://localhost:4999/api/health")
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertTrue(data.get("success"))

@@ -20,25 +20,25 @@ pip install -r requirements.txt
 python api/server.py
 ```
 
-服务将在 `http://localhost:5000` 启动
+服务将在 `http://localhost:4999` 启动
 
 ## 📋 快速测试
 
 ### 1. 健康检查
 ```bash
-curl http://localhost:5000/api/health
+curl http://localhost:4999/api/health
 ```
 
 ### 2. 识别图片文件
 ```bash
-curl -X POST http://localhost:5000/api/ocr/file \
+curl -X POST http://localhost:4999/api/ocr/file \
   -F "file=@test.jpg" \
   -F "extract_text=true"
 ```
 
 ### 3. 识别网络图片
 ```bash
-curl -X POST http://localhost:5000/api/ocr/url \
+curl -X POST http://localhost:4999/api/ocr/url \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/image.jpg", "extract_text": true}'
 ```
@@ -77,7 +77,7 @@ import requests
 with open('test.jpg', 'rb') as f:
     files = {'file': f}
     data = {'extract_text': 'true'}
-    response = requests.post('http://localhost:5000/api/ocr/file', 
+    response = requests.post('http://localhost:4999/api/ocr/file', 
                             files=files, data=data)
     result = response.json()
     print(result['data']['text'])
@@ -89,7 +89,7 @@ const formData = new FormData();
 formData.append('file', fileInput.files[0]);
 formData.append('extract_text', 'true');
 
-fetch('http://localhost:5000/api/ocr/file', {
+fetch('http://localhost:4999/api/ocr/file', {
     method: 'POST',
     body: formData
 })
@@ -99,7 +99,7 @@ fetch('http://localhost:5000/api/ocr/file', {
 
 ### curl
 ```bash
-curl -X POST http://localhost:5000/api/ocr/file \
+curl -X POST http://localhost:4999/api/ocr/file \
   -F "file=@image.jpg" \
   -F "extract_text=true"
 ```
@@ -164,7 +164,7 @@ curl -X POST http://localhost:5000/api/ocr/file \
 ### 服务无法启动
 1. 检查Python版本（需要3.7+）
 2. 安装依赖：`pip install -r requirements_server.txt`
-3. 检查端口5000是否被占用
+3. 检查端口4999是否被占用
 
 ### 识别失败
 1. 检查图片格式是否支持
@@ -174,7 +174,7 @@ curl -X POST http://localhost:5000/api/ocr/file \
 ### 连接被拒绝
 1. 确认服务器已启动
 2. 检查防火墙设置
-3. 确认访问地址正确（http://localhost:5000）
+3. 确认访问地址正确（http://localhost:4999）
 
 ## 📞 更多信息
 

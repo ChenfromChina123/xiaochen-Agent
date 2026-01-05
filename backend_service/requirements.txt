@@ -5,4 +5,10 @@ Pillow>=9.0.0
 PyMuPDF>=1.23.0
 requests>=2.31.0
 werkzeug>=2.3.0
+paddleocr>=2.7.0
+paddlepaddle>=2.5.0
+numpy>=1.24.0
+shapely
+pyclipper
+opencv-python-headless
 

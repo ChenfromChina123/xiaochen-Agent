@@ -16,7 +16,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 # 服务器地址
-SERVER_URL = "http://localhost:5000"
+SERVER_URL = "http://localhost:4999"
 
 def create_test_image(text="测试文字OCR", filename=None):
     """

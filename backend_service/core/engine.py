@@ -24,6 +24,12 @@ try:
 except ImportError:
     DOCUMENT_SUPPORT = False
 
+try:
+    from paddleocr import PaddleOCR
+    PADDLE_OCR_SUPPORT = True
+except ImportError:
+    PADDLE_OCR_SUPPORT = False
+
 
 class OCREngine:
     """OCR识别引擎核心类"""
@@ -59,7 +65,9 @@ class OCREngine:
         self.config_dir = os.path.dirname(self.config_path) if self.config_path else os.getcwd()
         self.config = self._load_config(self.config_path)
         self.process = None
+        self.ocr_instance = None # 用于存储 PaddleOCR 实例
         self.is_initialized = False
+        self.use_python_lib = False # 是否使用 Python 库版本
         
     def _load_config(self, config_path):
         """
@@ -96,7 +104,7 @@ class OCREngine:
 
     def initialize(self):
         """
-        初始化OCR引擎进程
+        初始化OCR引擎
         
         返回:
             成功返回 True，失败返回 False
@@ -104,6 +112,47 @@ class OCREngine:
         if self.is_initialized:
             return True
             
+        # 自动检测是否需要使用 Python 库版本 (Linux 或 配置强制使用)
+        is_linux = "linux" in str(sys_platform).lower()
+        force_python = self.config.get("use_python_lib", False)
+        
+        if (is_linux or force_python) and PADDLE_OCR_SUPPORT:
+            try:
+                print(f"[信息] 正在初始化 Python 版 PaddleOCR (平台: {sys_platform})...")
+                # 初始化 PaddleOCR 实例
+                # 参数映射
+                lang = "ch"
+                if "config_chinese.txt" in self.config.get("language", ""):
+                    lang = "ch"
+                elif "config_en.txt" in self.config.get("language", ""):
+                    lang = "en"
+                
+                # 提取更多配置参数
+                use_angle_cls = self.config.get("cls", self.config.get("use_angle_cls", False))
+                cpu_threads = self.config.get("cpu_threads", 4)
+                enable_mkldnn = self.config.get("enable_mkldnn", True)
+                limit_side_len = self.config.get("limit_side_len", 4320)
+                
+                self.ocr_instance = PaddleOCR(
+                    use_angle_cls=use_angle_cls,
+                    lang=lang,
+                    use_gpu=False, # 默认 CPU
+                    show_log=False,
+                    cpu_threads=cpu_threads,
+                    enable_mkldnn=enable_mkldnn,
+                    limit_side_len=limit_side_len
+                )
+                self.use_python_lib = True
+                self.is_initialized = True
+                print("[成功] Python 版 PaddleOCR 初始化完成")
+                return True
+            except Exception as e:
+                print(f"[错误] 初始化 Python 版 PaddleOCR 失败: {e}")
+                if is_linux: # Linux 下只能用 Python 版，失败直接返回
+                    return False
+                # Windows 下如果 Python 版失败，尝试回退到 exe 版
+                print("[信息] 尝试回退到 EXE 版...")
+
         try:
             # 获取exe路径
             exe_path = self._get_absolute_path(self.config.get("exe_path", ""))
@@ -254,6 +303,9 @@ class OCREngine:
         返回:
             识别结果字典
         """
+        if self.use_python_lib:
+            return self._run_python_ocr(cmd_dict)
+
         if not self.process or self.process.poll() is not None:
             return {"code": 904, "data": "OCR引擎进程已退出", "score": 0}
         
@@ -279,6 +331,67 @@ class OCREngine:
             
         except Exception as e:
             return {"code": 905, "data": f"OCR识别异常: {e}", "score": 0}
+
+    def _run_python_ocr(self, cmd_dict):
+        """
+        使用 Python 库版本进行识别
+        """
+        if not self.ocr_instance:
+            return {"code": 901, "data": "Python OCR 实例未初始化", "score": 0}
+
+        try:
+            import numpy as np
+            from PIL import Image
+            import io
+
+            # 获取图像输入
+            img_input = None
+            if "image_path" in cmd_dict:
+                img_input = cmd_dict["image_path"]
+            elif "image_base64" in cmd_dict:
+                img_data = b64decode(cmd_dict["image_base64"])
+                img_input = np.array(Image.open(io.BytesIO(img_data)))
+            
+            if img_input is None:
+                return {"code": 906, "data": "未提供有效的图像输入", "score": 0}
+
+            # 执行识别
+            # 允许在请求中覆盖 cls 参数
+            use_cls = cmd_dict.get("cls", self.config.get("cls", False))
+            result = self.ocr_instance.ocr(img_input, cls=use_cls)
+            
+            # 转换格式为 PaddleOCR-json 格式
+            formatted_data = []
+            total_score = 0
+            
+            if result and result[0]:
+                for line in result[0]:
+                    box = line[0]
+                    text, score = line[1]
+                    formatted_data.append({
+                        "text": text,
+                        "box": box,
+                        "score": score
+                    })
+                    total_score += score
+                
+                count = len(formatted_data)
+                avg_score = total_score / count if count > 0 else 0
+                
+                return {
+                    "code": 100,
+                    "data": formatted_data,
+                    "score": avg_score
+                }
+            else:
+                return {
+                    "code": 101,
+                    "data": [],
+                    "score": 0
+                }
+
+        except Exception as e:
+            return {"code": 905, "data": f"Python OCR 识别异常: {e}", "score": 0}
     
     def recognize_document(self, doc_path, page_range=None, dpi=200, password="", progress_callback=None):
         """
@@ -537,6 +650,12 @@ class OCREngine:
         """
         关闭OCR引擎，释放资源
         """
+        if self.use_python_lib:
+            self.ocr_instance = None
+            self.is_initialized = False
+            print("[成功] Python OCR 实例已释放")
+            return
+
         if self.process:
             try:
                 self.process.kill()

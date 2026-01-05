@@ -704,358 +704,373 @@ class Agent:
 
         countCycle = 0
         compactedInThisChat = False
-        while countCycle < self.config.maxCycles:
-            try:
-                countCycle += 1
-                print(f"{Fore.YELLOW}[Cycle {countCycle}/{self.config.maxCycles}] Processing...{Style.RESET_ALL}")
+        try:
+            while countCycle < self.config.maxCycles:
+                try:
+                    countCycle += 1
+                    print(f"{Fore.YELLOW}[Cycle {countCycle}/{self.config.maxCycles}] Processing...{Style.RESET_ALL}")
 
-                if not compactedInThisChat:
-                    historyWorking, didCompact = self._maybe_compact_history(historyWorking, msgSystem)
-                    if didCompact:
-                        compactedInThisChat = True
+                    if not compactedInThisChat:
+                        historyWorking, didCompact = self._maybe_compact_history(historyWorking, msgSystem)
+                        if didCompact:
+                            compactedInThisChat = True
 
-                messages = [msgSystem] + historyWorking
-                estimateTokens = self.estimateTokensOfMessages(messages)
-                if estimateTokens > 115000 and len(historyWorking) > 60:
-                    head = historyWorking[:6]
-                    tail = historyWorking[-54:]
-                    messages = [msgSystem] + head + tail
+                    messages = [msgSystem] + historyWorking
                     estimateTokens = self.estimateTokensOfMessages(messages)
-                
-                localHitEstimate = 0
-                if self.lastFullMessages:
-                    commonPrefix = []
-                    for m1, m2 in zip(self.lastFullMessages, messages):
-                        if m1 == m2:
-                            commonPrefix.append(m1)
-                        else:
-                            break
-                    if commonPrefix:
-                        localHitEstimate = self.estimateTokensOfMessages(commonPrefix)
-
-                self.lastFullMessages = list(messages)
-                
-                print(f"{Fore.MAGENTA}[Token Estimate] ~{estimateTokens} tokens{Style.RESET_ALL}")
-
-                try:
-                    log_request(messages)
-                except Exception as e:
-                    print(f"{Fore.RED}[Log Error] Could not save log: {str(e)}{Style.RESET_ALL}")
-
-                headers = {"Authorization": f"Bearer {self.config.apiKey}", "Content-Type": "application/json"}
-                payload = {
-                    "model": self.config.modelName,
-                    "messages": messages,
-                    "temperature": 0.1,
-                    "stream": True,
-                    "stream_options": {"include_usage": True},
-                    "max_tokens": 8000,
-                }
-
-                replyFull = ""
-                fullReasoning = ""
-                hasReasoned = False
-                printedReasoningHeader = False
-                printedAnswerHeader = False
-                usageOfRequest: Optional[Dict[str, Any]] = None
-                print(f"{Fore.GREEN}[小晨终端助手]: ", end="")
-                try:
-                    response = requests.post(
-                        self.endpointOfChat, 
-                        headers=headers, 
-                        json=payload, 
-                        stream=True, 
-                        timeout=60,
-                        verify=self.config.verifySsl
-                    )
-                    response.raise_for_status()
-
-                    for line in response.iter_lines():
-                        if not line:
-                            continue
-                        line = line.decode("utf-8").strip()
-                        if line.startswith("data: "):
-                            line = line[6:]
-                        if line in ("", "[DONE]"):
-                            continue
-                        import json
-
-                        dataChunk = json.loads(line)
-                        if isinstance(dataChunk, dict) and "usage" in dataChunk and isinstance(dataChunk.get("usage"), dict):
-                            usageOfRequest = dataChunk.get("usage")
-                        choices = dataChunk.get("choices") if isinstance(dataChunk, dict) else None
-                        if isinstance(choices, list) and choices:
-                            delta = choices[0].get("delta") if isinstance(choices[0], dict) else None
-                            if not delta:
-                                continue
-                            
-                            # 提取推理内容 (reasoning_content)
-                            reasoning = delta.get("reasoning_content", "")
-                            if reasoning:
-                                if not printedReasoningHeader:
-                                    printedReasoningHeader = True
-                                    printedAnswerHeader = False
-                                    print(f"\n{Fore.CYAN}【思考】{Style.RESET_ALL}\n", end="", flush=True)
-                                if not hasReasoned:
-                                    hasReasoned = True
-                                fullReasoning += reasoning
-                                print(f"{Fore.CYAN}{reasoning}{Style.RESET_ALL}", end="", flush=True)
-
-                            # 提取正文内容
-                            token = delta.get("content", "")
-                            if token:
-                                if (hasReasoned or printedReasoningHeader) and not printedAnswerHeader:
-                                    printedAnswerHeader = True
-                                    hasReasoned = False
-                                    print(f"\n{Fore.GREEN}【回答】{Style.RESET_ALL}\n", end="", flush=True)
-                                replyFull += token
-                                print(token, end="", flush=True)
-                except KeyboardInterrupt:
-                    print(f"\n{Fore.YELLOW}⚠️  用户中断了 AI 输出{Style.RESET_ALL}")
-                    self.interruptHandler.set_interrupted()
-                    if not replyFull:
-                        replyFull = "[Interrupted]"
-                    else:
-                        replyFull += "\n[Interrupted]"
-                except requests.exceptions.RequestException as e:
-                    if e.response is not None and e.response.status_code == 401:
-                        msgError = f"{Fore.RED}[Request Error] 401 Unauthorized: 您的 API Key 无效或已过期。{Style.RESET_ALL}\n"
-                        msgError += f"{Fore.YELLOW}请检查 config.json 中的 api_key，或使用命令 `model key <your_key>` 重新设置。{Style.RESET_ALL}"
-                    else:
-                        msgError = f"{Fore.RED}[Request Error] {str(e)}{Style.RESET_ALL}"
-                    print(msgError)
-                    replyFull = msgError
-                    break
-                finally:
-                    print("\n" + "-" * 40)
-                    if usageOfRequest:
-                        prompt = int(usageOfRequest.get("prompt_tokens") or 0)
-                        hit = 0
-                        hit_source = "vendor"
-                        if "prompt_cache_hit_tokens" in usageOfRequest:
-                            hit = int(usageOfRequest.get("prompt_cache_hit_tokens") or 0)
-                        else:
-                            details = usageOfRequest.get("prompt_tokens_details")
-                            if isinstance(details, dict) and "cached_tokens" in details:
-                                hit = int(details.get("cached_tokens") or 0)
+                    if estimateTokens > 115000 and len(historyWorking) > 60:
+                        head = historyWorking[:6]
+                        tail = historyWorking[-54:]
+                        messages = [msgSystem] + head + tail
+                        estimateTokens = self.estimateTokensOfMessages(messages)
+                    
+                    localHitEstimate = 0
+                    if self.lastFullMessages:
+                        commonPrefix = []
+                        for m1, m2 in zip(self.lastFullMessages, messages):
+                            if m1 == m2:
+                                commonPrefix.append(m1)
                             else:
-                                hit_source = "local"
-                                if localHitEstimate > 0 and prompt > 0:
-                                    hit = min(int(localHitEstimate), prompt)
+                                break
+                        if commonPrefix:
+                            localHitEstimate = self.estimateTokensOfMessages(commonPrefix)
+
+                    self.lastFullMessages = list(messages)
+                    
+                    print(f"{Fore.MAGENTA}[Token Estimate] ~{estimateTokens} tokens{Style.RESET_ALL}")
+
+                    try:
+                        log_request(messages)
+                    except Exception as e:
+                        print(f"{Fore.RED}[Log Error] Could not save log: {str(e)}{Style.RESET_ALL}")
+
+                    headers = {"Authorization": f"Bearer {self.config.apiKey}", "Content-Type": "application/json"}
+                    payload = {
+                        "model": self.config.modelName,
+                        "messages": messages,
+                        "temperature": 0.1,
+                        "stream": True,
+                        "stream_options": {"include_usage": True},
+                        "max_tokens": 8000,
+                    }
+
+                    replyFull = ""
+                    fullReasoning = ""
+                    hasReasoned = False
+                    printedReasoningHeader = False
+                    printedAnswerHeader = False
+                    usageOfRequest: Optional[Dict[str, Any]] = None
+                    print(f"{Fore.GREEN}[小晨终端助手]: ", end="")
+                    try:
+                        response = requests.post(
+                            self.endpointOfChat, 
+                            headers=headers, 
+                            json=payload, 
+                            stream=True, 
+                            timeout=60,
+                            verify=self.config.verifySsl
+                        )
+                        response.raise_for_status()
+
+                        for line in response.iter_lines():
+                            if not line:
+                                continue
+                            line = line.decode("utf-8").strip()
+                            if line.startswith("data: "):
+                                line = line[6:]
+                            if line in ("", "[DONE]"):
+                                continue
+                            import json
+
+                            dataChunk = json.loads(line)
+                            if isinstance(dataChunk, dict) and "usage" in dataChunk and isinstance(dataChunk.get("usage"), dict):
+                                usageOfRequest = dataChunk.get("usage")
+                            choices = dataChunk.get("choices") if isinstance(dataChunk, dict) else None
+                            if isinstance(choices, list) and choices:
+                                delta = choices[0].get("delta") if isinstance(choices[0], dict) else None
+                                if not delta:
+                                    continue
+                                
+                                # 提取推理内容 (reasoning_content)
+                                reasoning = delta.get("reasoning_content", "")
+                                if reasoning:
+                                    if not printedReasoningHeader:
+                                        printedReasoningHeader = True
+                                        printedAnswerHeader = False
+                                        print(f"\n{Fore.CYAN}【思考】{Style.RESET_ALL}\n", end="", flush=True)
+                                    if not hasReasoned:
+                                        hasReasoned = True
+                                    fullReasoning += reasoning
+                                    print(f"{Fore.CYAN}{reasoning}{Style.RESET_ALL}", end="", flush=True)
+
+                                # 提取正文内容
+                                token = delta.get("content", "")
+                                if token:
+                                    if (hasReasoned or printedReasoningHeader) and not printedAnswerHeader:
+                                        printedAnswerHeader = True
+                                        hasReasoned = False
+                                        print(f"\n{Fore.GREEN}【回答】{Style.RESET_ALL}\n", end="", flush=True)
+                                    replyFull += token
+                                    print(token, end="", flush=True)
+                    except KeyboardInterrupt:
+                        print(f"\n{Fore.YELLOW}⚠️  用户中断了 AI 输出{Style.RESET_ALL}")
+                        self.interruptHandler.set_interrupted()
+                        if not replyFull:
+                            replyFull = "[Interrupted]"
+                        else:
+                            replyFull += "\n[Interrupted]"
+                    except Exception as e:
+                        if hasattr(e, "response") and e.response is not None and e.response.status_code == 401:
+                            msgError = f"{Fore.RED}[Request Error] 401 Unauthorized: 您的 API Key 无效或已过期。{Style.RESET_ALL}\n"
+                            msgError += f"{Fore.YELLOW}请检查 config.json 中的 api_key，或使用命令 `model key <your_key>` 重新设置。{Style.RESET_ALL}"
+                        else:
+                            msgError = f"{Fore.RED}[Request Error] {str(e)}{Style.RESET_ALL}"
+                        print(msgError)
+                        replyFull = msgError
+                        break
+                    finally:
+                        print("\n" + "-" * 40)
+                        if usageOfRequest:
+                            prompt = int(usageOfRequest.get("prompt_tokens") or 0)
+                            hit = 0
+                            hit_source = "vendor"
+                            if "prompt_cache_hit_tokens" in usageOfRequest:
+                                hit = int(usageOfRequest.get("prompt_cache_hit_tokens") or 0)
+                            else:
+                                details = usageOfRequest.get("prompt_tokens_details")
+                                if isinstance(details, dict) and "cached_tokens" in details:
+                                    hit = int(details.get("cached_tokens") or 0)
+                                else:
+                                    hit_source = "local"
+                                    if localHitEstimate > 0 and prompt > 0:
+                                        hit = min(int(localHitEstimate), prompt)
                                 usageOfRequest["prompt_cache_hit_tokens"] = hit
                                 if "prompt_tokens_details" not in usageOfRequest:
                                     usageOfRequest["prompt_tokens_details"] = {}
                                 if isinstance(usageOfRequest["prompt_tokens_details"], dict):
                                     usageOfRequest["prompt_tokens_details"]["cached_tokens"] = hit
 
-                        self.statsOfCache.updateFromUsage(usageOfRequest)
+                            self.statsOfCache.updateFromUsage(usageOfRequest)
 
-                        miss = int(usageOfRequest.get("prompt_cache_miss_tokens") or 0)
-                        if miss == 0 and prompt > hit:
-                            miss = prompt - hit
+                            miss = int(usageOfRequest.get("prompt_cache_miss_tokens") or 0)
+                            if miss == 0 and prompt > hit:
+                                miss = prompt - hit
 
-                        rateReq = CacheStats.getHitRateOfUsage(usageOfRequest)
-                        rateSession = self.statsOfCache.getSessionHitRate()
-                        rateReqStr = f"{rateReq*100:.1f}%" if rateReq is not None else "N/A"
-                        if hit_source == "local":
-                            rateReqStr += " (Local)"
-                        
-                        rateSessionStr = f"{rateSession*100:.1f}%" if rateSession is not None else "N/A"
-                        print(
-                            f"{Fore.CYAN}[Cache] hit={hit} miss={miss} rate={rateReqStr} | session_rate={rateSessionStr}{Style.RESET_ALL}"
-                        )
-                        try:
-                            append_usage_history(
-                                usage=usageOfRequest,
-                                cache={
-                                    "hit": hit,
-                                    "miss": miss,
-                                    "rate_request": rateReq,
-                                    "rate_session": rateSession,
-                                    "session": {
-                                        "counted_requests": self.statsOfCache.countedRequests,
-                                        "hit_tokens": self.statsOfCache.promptCacheHitTokens,
-                                        "miss_tokens": self.statsOfCache.promptCacheMissTokens,
-                                        "prompt_tokens": self.statsOfCache.promptTokens,
-                                        "completion_tokens": self.statsOfCache.completionTokens,
-                                        "total_tokens": self.statsOfCache.totalTokens,
-                                    },
-                                },
+                            rateReq = CacheStats.getHitRateOfUsage(usageOfRequest)
+                            rateSession = self.statsOfCache.getSessionHitRate()
+                            rateReqStr = f"{rateReq*100:.1f}%" if rateReq is not None else "N/A"
+                            if hit_source == "local":
+                                rateReqStr += " (Local)"
+                            
+                            rateSessionStr = f"{rateSession*100:.1f}%" if rateSession is not None else "N/A"
+                            print(
+                                f"{Fore.CYAN}[Cache] hit={hit} miss={miss} rate={rateReqStr} | session_rate={rateSessionStr}{Style.RESET_ALL}"
                             )
-                        except Exception:
-                            pass
+                            try:
+                                append_usage_history(
+                                    usage=usageOfRequest,
+                                    cache={
+                                        "hit": hit,
+                                        "miss": miss,
+                                        "rate_request": rateReq,
+                                        "rate_session": rateSession,
+                                        "session": {
+                                            "counted_requests": self.statsOfCache.countedRequests,
+                                            "hit_tokens": self.statsOfCache.promptCacheHitTokens,
+                                            "miss_tokens": self.statsOfCache.promptCacheMissTokens,
+                                            "prompt_tokens": self.statsOfCache.promptTokens,
+                                            "completion_tokens": self.statsOfCache.completionTokens,
+                                            "total_tokens": self.statsOfCache.totalTokens,
+                                        },
+                                    },
+                                )
+                            except Exception:
+                                pass
 
-                historyWorking.append({"role": "assistant", "content": replyFull})
-                if on_history_updated is not None:
-                    try:
-                        on_history_updated([msgSystem] + list(historyWorking))
-                    except Exception:
-                        pass
-                tasks = parse_stack_of_tags(replyFull)
-
-                if not tasks:
-                    replyLower = replyFull.lower()
-                    suspiciousTagTokens = [
-                        "<write_file",
-                        "<read_file",
-                        "<run_command",
-                        "<search_files",
-                        "<search_in_files",
-                        "<edit_lines",
-                        "<replace_in_file",
-                        "<web_search",
-                        "<visit_page",
-                        "<task_add",
-                        "<task_update",
-                        "<task_delete",
-                        "<task_list",
-                        "<task_clear",
-                        "</write_file",
-                        "</read_file",
-                        "</run_command",
-                        "</search_files",
-                        "</search_in_files",
-                        "</edit_lines",
-                        "</replace_in_file",
-                        "</web_search",
-                        "</visit_page",
-                        "</task_add",
-                        "</task_update",
-                        "</task_delete",
-                        "</task_list",
-                        "</task_clear",
-                    ]
-                    if any(tok in replyLower for tok in suspiciousTagTokens):
-                        feedbackError = "ERROR: Invalid Format! Use one or more closed tags. No tag if no task."
-                        historyWorking.append({"role": "user", "content": feedbackError})
-                    else:
-                        break
-
-                observations: List[str] = []
-                isCancelled = False
-                didExecuteAnyTask = False
-                
-                # 检查是否被用户中断
-                if self.interruptHandler.is_interrupted():
-                    print(f"\n{Fore.YELLOW}⚠️  用户已中断执行{Style.RESET_ALL}")
-                    historyWorking.append({"role": "user", "content": "用户中断执行"})
-                    break
-                
-                ok, batchApproved = self.confirmBatchExecution(tasks)
-                if not ok:
-                    historyWorking.append({"role": "user", "content": "User cancelled execution"})
-                    isCancelled = True
-                
-                # 打印任务执行计划
-                if tasks and ok:
-                    print(f"\n{Style.BRIGHT}{'='*50}{Style.RESET_ALL}")
-                    print(f"{Style.BRIGHT}开始执行 {len(tasks)} 个任务{Style.RESET_ALL}")
-                    print(f"{Style.BRIGHT}{'='*50}{Style.RESET_ALL}")
-                
-                for idx, t in enumerate(tasks, 1):
-                    # 检查中断
-                    if self.interruptHandler.is_interrupted():
-                        print(f"\n{Fore.YELLOW}⚠️  用户已中断执行{Style.RESET_ALL}")
-                        historyWorking.append({"role": "user", "content": "用户中断执行"})
-                        isCancelled = True
-                        break
-                    
-                    if isCancelled:
-                        break
-                    
-                    # 打印当前任务信息
-                    print_tool_execution_header(t, idx, len(tasks))
-                    
-                    isWhitelisted = self.isTaskWhitelisted(t)
-                    if isWhitelisted or batchApproved:
-                        confirm = "y"
-                    else:
-                        try:
-                            confirm = input(f"{Style.BRIGHT}执行此任务? (y=是 / n=否 / Ctrl+C=中断): {Style.RESET_ALL}").strip().lower()
-                            if confirm == "":
-                                confirm = "y"
-                        except KeyboardInterrupt:
-                            print(f"\n{Fore.YELLOW}⚠️  用户中断执行{Style.RESET_ALL}")
-                            self.interruptHandler.set_interrupted()
-                            historyWorking.append({"role": "user", "content": "用户中断执行"})
-                            isCancelled = True
-                            break
-
-                    if confirm.lower() != "y":
-                        historyWorking.append({"role": "user", "content": "User cancelled execution"})
-                        isCancelled = True
-                        break
-                    didExecuteAnyTask = True
-
-                    obs = None
-                    if t["type"] == "search_files":
-                        obs = self.tools.search_files(t)
-                    elif t["type"] == "search_in_files":
-                        obs = self.tools.search_in_files(t)
-                    elif t["type"] == "write_file":
-                        obs = self.tools.write_file(t)
-                    elif t["type"] == "replace_in_file":
-                        obs = self.tools.replace_in_file(t)
-                    elif t["type"] == "edit_lines":
-                        obs = self.tools.edit_lines(t)
-                    elif t["type"] == "copy_lines":
-                        obs = self.tools.copy_lines(t)
-                    elif t["type"] == "paste_lines":
-                        obs = self.tools.paste_lines(t)
-                    elif t["type"] == "indent_lines":
-                        obs = self.tools.indent_lines(t)
-                    elif t["type"] == "dedent_lines":
-                        obs = self.tools.dedent_lines(t)
-                    elif t["type"] == "read_file":
-                        obs = self.tools.read_file(t)
-                    elif t["type"] == "run_command":
-                        obs = self.tools.run_command(t)
-                    elif t["type"] == "web_search":
-                        obs = self.tools.web_search(t)
-                    elif t["type"] == "visit_page":
-                        obs = self.tools.visit_page(t)
-                    elif t["type"] == "ocr_image":
-                        obs = self.tools.ocr_image(t)
-                    elif t["type"] == "ocr_document":
-                        obs = self.tools.ocr_document(t)
-                    elif t["type"] == "task_add":
-                        obs = self.tools.task_add(t)
-                    elif t["type"] == "task_update":
-                        obs = self.tools.task_update(t)
-                    elif t["type"] == "task_delete":
-                        obs = self.tools.task_delete(t)
-                    elif t["type"] == "task_clear":
-                        obs = self.tools.task_clear(t)
-                    elif t["type"] == "task_list":
-                        obs = self.tools.task_list(t)
-
-                    if obs:
-                        observations.append(obs)
-                        self.printToolResult(obs)
-
-                if observations:
-                    historyWorking.append({"role": "user", "content": "\n".join(observations)})
+                    historyWorking.append({"role": "assistant", "content": replyFull})
                     if on_history_updated is not None:
                         try:
                             on_history_updated([msgSystem] + list(historyWorking))
                         except Exception:
                             pass
-                if isCancelled:
+                    tasks = parse_stack_of_tags(replyFull)
+
+                    if not tasks:
+                        replyLower = replyFull.lower()
+                        suspiciousTagTokens = [
+                            "<write_file",
+                            "<read_file",
+                            "<run_command",
+                            "<search_files",
+                            "<search_in_files",
+                            "<edit_lines",
+                            "<replace_in_file",
+                            "<web_search",
+                            "<visit_page",
+                            "<task_add",
+                            "<task_update",
+                            "<task_delete",
+                            "<task_list",
+                            "<task_clear",
+                            "</write_file",
+                            "</read_file",
+                            "</run_command",
+                            "</search_files",
+                            "</search_in_files",
+                            "</edit_lines",
+                            "</replace_in_file",
+                            "</web_search",
+                            "</visit_page",
+                            "</task_add",
+                            "</task_update",
+                            "</task_delete",
+                            "</task_list",
+                            "</task_clear",
+                        ]
+                        if any(tok in replyLower for tok in suspiciousTagTokens):
+                            feedbackError = "ERROR: Invalid Format! Use one or more closed tags. No tag if no task."
+                            historyWorking.append({"role": "user", "content": feedbackError})
+                        else:
+                            break
+
+                    observations: List[str] = []
+                    isCancelled = False
+                    didExecuteAnyTask = False
+                    
+                    # 检查是否被用户中断
+                    if self.interruptHandler.is_interrupted():
+                        print(f"\n{Fore.YELLOW}⚠️  用户已中断执行{Style.RESET_ALL}")
+                        historyWorking.append({"role": "user", "content": "用户中断执行"})
+                        break
+                
+                    ok, batchApproved = self.confirmBatchExecution(tasks)
+                    if not ok:
+                        historyWorking.append({"role": "user", "content": "User cancelled execution"})
+                        isCancelled = True
+                    
+                    # 打印任务执行计划
+                    if tasks and ok:
+                        print(f"\n{Style.BRIGHT}{'='*50}{Style.RESET_ALL}")
+                        print(f"{Style.BRIGHT}开始执行 {len(tasks)} 个任务{Style.RESET_ALL}")
+                        print(f"{Style.BRIGHT}{'='*50}{Style.RESET_ALL}")
+                    
+                    for idx, t in enumerate(tasks, 1):
+                        # 检查中断
+                        if self.interruptHandler.is_interrupted():
+                            print(f"\n{Fore.YELLOW}⚠️  用户已中断执行{Style.RESET_ALL}")
+                            historyWorking.append({"role": "user", "content": "用户中断执行"})
+                            isCancelled = True
+                            break
+                        
+                        if isCancelled:
+                            break
+                        
+                        # 打印当前任务信息
+                        print_tool_execution_header(t, idx, len(tasks))
+                        
+                        isWhitelisted = self.isTaskWhitelisted(t)
+                        if isWhitelisted or batchApproved:
+                            confirm = "y"
+                        else:
+                            try:
+                                confirm = input(f"{Style.BRIGHT}执行此任务? (y=是 / n=否 / Ctrl+C=中断): {Style.RESET_ALL}").strip().lower()
+                                if confirm == "":
+                                    confirm = "y"
+                            except KeyboardInterrupt:
+                                print(f"\n{Fore.YELLOW}⚠️  用户中断执行{Style.RESET_ALL}")
+                                self.interruptHandler.set_interrupted()
+                                historyWorking.append({"role": "user", "content": "用户中断执行"})
+                                isCancelled = True
+                                break
+
+                        if confirm.lower() != "y":
+                            historyWorking.append({"role": "user", "content": "User cancelled execution"})
+                            isCancelled = True
+                            break
+                        didExecuteAnyTask = True
+
+                        obs = None
+                        if t["type"] == "search_files":
+                            obs = self.tools.search_files(t)
+                        elif t["type"] == "search_in_files":
+                            obs = self.tools.search_in_files(t)
+                        elif t["type"] == "write_file":
+                            obs = self.tools.write_file(t)
+                        elif t["type"] == "replace_in_file":
+                            obs = self.tools.replace_in_file(t)
+                        elif t["type"] == "edit_lines":
+                            obs = self.tools.edit_lines(t)
+                        elif t["type"] == "copy_lines":
+                            obs = self.tools.copy_lines(t)
+                        elif t["type"] == "paste_lines":
+                            obs = self.tools.paste_lines(t)
+                        elif t["type"] == "indent_lines":
+                            obs = self.tools.indent_lines(t)
+                        elif t["type"] == "dedent_lines":
+                            obs = self.tools.dedent_lines(t)
+                        elif t["type"] == "read_file":
+                            obs = self.tools.read_file(t)
+                        elif t["type"] == "run_command":
+                            obs = self.tools.run_command(t)
+                        elif t["type"] == "web_search":
+                            obs = self.tools.web_search(t)
+                        elif t["type"] == "visit_page":
+                            obs = self.tools.visit_page(t)
+                        elif t["type"] == "ocr_image":
+                            obs = self.tools.ocr_image(t)
+                        elif t["type"] == "ocr_document":
+                            obs = self.tools.ocr_document(t)
+                        elif t["type"] == "task_add":
+                            obs = self.tools.task_add(t)
+                        elif t["type"] == "task_update":
+                            obs = self.tools.task_update(t)
+                        elif t["type"] == "task_delete":
+                            obs = self.tools.task_delete(t)
+                        elif t["type"] == "task_clear":
+                            obs = self.tools.task_clear(t)
+                        elif t["type"] == "task_list":
+                            obs = self.tools.task_list(t)
+
+                        if obs:
+                            observations.append(obs)
+                            self.printToolResult(obs)
+
+                    if observations:
+                        historyWorking.append({"role": "user", "content": "\n".join(observations)})
+                        if on_history_updated is not None:
+                            try:
+                                on_history_updated([msgSystem] + list(historyWorking))
+                            except Exception:
+                                pass
+                    if isCancelled:
+                        break
+                    if didExecuteAnyTask and self.config.stopAfterFirstToolExecution:
+                        break
+
+                except Exception as e:
+                    print(f"{Fore.RED}[Cycle Error] {str(e)}{Style.RESET_ALL}")
+                    historyWorking.append({"role": "user", "content": f"ERROR: Agent crashed with error: {str(e)}"})
                     break
-                if didExecuteAnyTask and self.config.stopAfterFirstToolExecution:
-                    break
 
-            except Exception as e:
-                print(f"{Fore.RED}[Cycle Error] {str(e)}{Style.RESET_ALL}")
-                historyWorking.append({"role": "user", "content": f"ERROR: Agent crashed with error: {str(e)}"})
-                break
+                if countCycle >= self.config.maxCycles:
+                    print(f"{Fore.RED}[Tip] Max cycles reached.{Style.RESET_ALL}")
 
-        if countCycle >= self.config.maxCycles:
-            print(f"{Fore.RED}[Tip] Max cycles reached.{Style.RESET_ALL}")
-
-        self.historyOfMessages = [msgSystem] + list(historyWorking)
-        self.maybePrintModificationStats()
-        self._chatMarkers.append(chat_marker)
+        except KeyboardInterrupt:
+            print(f"\n{Fore.YELLOW}⚠️  用户中断了代理运行{Style.RESET_ALL}")
+            self.interruptHandler.set_interrupted()
+            # 如果最后一条消息不是中断提示，且此时确实发生了中断，则记录
+            if not historyWorking or (historyWorking[-1].get("role") == "assistant" and "[Interrupted]" not in historyWorking[-1].get("content", "")):
+                if not historyWorking or historyWorking[-1].get("content") != "用户中断执行":
+                    historyWorking.append({"role": "user", "content": "用户中断执行"})
+        finally:
+            self.historyOfMessages = [msgSystem] + list(historyWorking)
+            # 确保即使中断也能持久化历史记录
+            if on_history_updated is not None:
+                try:
+                    on_history_updated(self.historyOfMessages)
+                except Exception:
+                    pass
+            self.maybePrintModificationStats()
+            self._chatMarkers.append(chat_marker)
 
 
 VoidAgent = Agent

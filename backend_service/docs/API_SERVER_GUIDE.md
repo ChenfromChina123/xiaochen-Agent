@@ -4,7 +4,7 @@
 
 OCR backend_service 提供了基于HTTP的RESTful API接口，可以通过标准的HTTP请求调用OCR识别功能。
 
-- **服务地址**: `http://localhost:5000` (默认)
+- **服务地址**: `http://localhost:4999` (默认)
 - **协议**: HTTP/HTTPS
 - **数据格式**: JSON
 - **字符编码**: UTF-8
@@ -33,7 +33,7 @@ OCR backend_service 提供了基于HTTP的RESTful API接口，可以通过标准
 
 **请求示例**:
 ```bash
-curl http://localhost:5000/
+curl http://localhost:4999/
 ```
 
 **响应示例**:
@@ -66,7 +66,7 @@ curl http://localhost:5000/
 
 **请求示例**:
 ```bash
-curl http://localhost:5000/api/health
+curl http://localhost:4999/api/health
 ```
 
 **响应示例**:
@@ -93,7 +93,7 @@ curl http://localhost:5000/api/health
 
 **请求示例**:
 ```bash
-curl http://localhost:5000/api/status
+curl http://localhost:4999/api/status
 ```
 
 **响应示例**:
@@ -131,11 +131,11 @@ curl http://localhost:5000/api/status
 **请求示例** (curl):
 ```bash
 # 完整结果
-curl -X POST http://localhost:5000/api/ocr/file \
+curl -X POST http://localhost:4999/api/ocr/file \
   -F "file=@test_image.jpg"
 
 # 只返回文本
-curl -X POST http://localhost:5000/api/ocr/file \
+curl -X POST http://localhost:4999/api/ocr/file \
   -F "file=@test_image.jpg" \
   -F "extract_text=true"
 ```
@@ -144,7 +144,7 @@ curl -X POST http://localhost:5000/api/ocr/file \
 ```python
 import requests
 
-url = "http://localhost:5000/api/ocr/file"
+url = "http://localhost:4999/api/ocr/file"
 files = {'file': open('test_image.jpg', 'rb')}
 data = {'extract_text': 'false'}
 response = requests.post(url, files=files, data=data)
@@ -203,7 +203,7 @@ print(response.json())
 
 **请求示例** (curl):
 ```bash
-curl -X POST http://localhost:5000/api/ocr/base64 \
+curl -X POST http://localhost:4999/api/ocr/base64 \
   -H "Content-Type: application/json" \
   -d '{
     "image": "iVBORw0KGgoAAAANSUhEUgAA...",
@@ -216,7 +216,7 @@ curl -X POST http://localhost:5000/api/ocr/base64 \
 import requests
 import base64
 
-url = "http://localhost:5000/api/ocr/base64"
+url = "http://localhost:4999/api/ocr/base64"
 
 # 读取图片并转换为base64
 with open('test_image.jpg', 'rb') as f:
@@ -248,7 +248,7 @@ print(response.json())
 
 **请求示例** (curl):
 ```bash
-curl -X POST http://localhost:5000/api/ocr/url \
+curl -X POST http://localhost:4999/api/ocr/url \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://example.com/image.jpg",
@@ -260,7 +260,7 @@ curl -X POST http://localhost:5000/api/ocr/url \
 ```python
 import requests
 
-url = "http://localhost:5000/api/ocr/url"
+url = "http://localhost:4999/api/ocr/url"
 
 payload = {
     'url': 'https://example.com/image.jpg',
@@ -293,11 +293,11 @@ print(response.json())
 **请求示例** (curl):
 ```bash
 # 识别全部页
-curl -X POST http://localhost:5000/api/ocr/document \
+curl -X POST http://localhost:4999/api/ocr/document \
   -F "file=@test_document.pdf"
 
 # 指定页码范围
-curl -X POST http://localhost:5000/api/ocr/document \
+curl -X POST http://localhost:4999/api/ocr/document \
   -F "file=@test_document.pdf" \
   -F "page_range_start=1" \
   -F "page_range_end=3" \
@@ -309,7 +309,7 @@ curl -X POST http://localhost:5000/api/ocr/document \
 ```python
 import requests
 
-url = "http://localhost:5000/api/ocr/document"
+url = "http://localhost:4999/api/ocr/document"
 
 files = {'file': open('test_document.pdf', 'rb')}
 data = {
@@ -352,7 +352,7 @@ print(response.json())
 
 **请求示例** (curl):
 ```bash
-curl -X POST http://localhost:5000/api/ocr/batch \
+curl -X POST http://localhost:4999/api/ocr/batch \
   -F "files=@test1.jpg" \
   -F "files=@test2.png" \
   -F "files=@test3.jpg" \
@@ -363,7 +363,7 @@ curl -X POST http://localhost:5000/api/ocr/batch \
 ```python
 import requests
 
-url = "http://localhost:5000/api/ocr/batch"
+url = "http://localhost:4999/api/ocr/batch"
 
 files = [
     ('files', ('test1.jpg', open('test1.jpg', 'rb'))),
@@ -454,7 +454,7 @@ async function ocrFile(filePath) {
   form.append('extract_text', 'true');
   
   const response = await axios.post(
-    'http://localhost:5000/api/ocr/file',
+    'http://localhost:4999/api/ocr/file',
     form,
     { headers: form.getHeaders() }
   );
@@ -465,7 +465,7 @@ async function ocrFile(filePath) {
 // URL识别
 async function ocrUrl(imageUrl) {
   const response = await axios.post(
-    'http://localhost:5000/api/ocr/url',
+    'http://localhost:4999/api/ocr/url',
     {
       url: imageUrl,
       extract_text: true
@@ -491,7 +491,7 @@ using System.Threading.Tasks;
 class OCRClient
 {
     private static readonly HttpClient client = new HttpClient();
-    private const string baseUrl = "http://localhost:5000";
+    private const string baseUrl = "http://localhost:4999";
     
     public static async Task<string> OCRFile(string filePath)
     {
@@ -522,7 +522,7 @@ import java.io.File;
 import java.io.IOException;
 
 public class OCRClient {
-    private static final String BASE_URL = "http://localhost:5000";
+    private static final String BASE_URL = "http://localhost:4999";
     private static final OkHttpClient client = new OkHttpClient();
     
     public static String ocrFile(String filePath) throws IOException {
@@ -563,7 +563,7 @@ pip install -r requirements_server.txt
 # 2. 启动服务
 python ocr_server.py
 
-# 服务将在 http://localhost:5000 启动
+# 服务将在 http://localhost:4999 启动
 ```
 
 ### 生产环境 (使用Gunicorn)
@@ -573,7 +573,7 @@ python ocr_server.py
 pip install gunicorn
 
 # 启动服务（4个工作进程）
-gunicorn -w 4 -b 0.0.0.0:5000 ocr_server:app
+gunicorn -w 4 -b 0.0.0.0:4999 ocr_server:app
 
 # 或使用配置文件
 gunicorn -c gunicorn_config.py ocr_server:app
@@ -590,7 +590,7 @@ COPY . /app
 
 RUN pip install -r requirements_server.txt
 
-EXPOSE 5000
+EXPOSE 4999
 
 CMD ["python", "ocr_server.py"]
 ```
@@ -644,4 +644,3 @@ CORS(app, resources={r"/api/*": {"origins": ["http://example.com"]}})
 ## 联系方式
 
 如有问题或建议，请参考项目README文档或提交Issue。
-
