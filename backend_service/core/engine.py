@@ -133,12 +133,12 @@ class OCREngine:
                 enable_mkldnn = self.config.get("enable_mkldnn", False)
                 
                 # 显式传递内存优化参数
+                # 移除 show_log, use_gpu 等可能在不同版本中不兼容的参数
                 self.ocr_instance = PaddleOCR(
                     use_angle_cls=use_angle_cls,
                     lang=lang,
                     cpu_threads=cpu_threads,
-                    enable_mkldnn=enable_mkldnn,
-                    show_log=False  # 减少日志输出，节省IO和内存
+                    enable_mkldnn=enable_mkldnn
                 )
                 self.use_python_lib = True
                 self.is_initialized = True
