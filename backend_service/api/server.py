@@ -10,7 +10,7 @@ import json
 import base64
 import tempfile
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Blueprint
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
@@ -24,6 +24,12 @@ from core.engine import OCREngine
 
 app = Flask(__name__)
 CORS(app)  # 允许跨域请求
+
+# 创建 Blueprint 以支持 /ocr 前缀
+ocr_bp = Blueprint('ocr', __name__)
+
+# 注册 Blueprint (全局注册，支持 gunicorn 等部署方式)
+app.register_blueprint(ocr_bp, url_prefix='/ocr')
 
 # 配置
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 最大50MB
@@ -106,7 +112,7 @@ def update_task_progress(task_id, current, total, percentage):
 
 # ==================== API路由 ====================
 
-@app.route('/api/progress/<task_id>')
+@ocr_bp.route('/api/progress/<task_id>')
 def get_progress(task_id):
     """获取任务进度"""
     progress_file = os.path.join(PROGRESS_DIR, f"{task_id}.json")
@@ -119,7 +125,7 @@ def get_progress(task_id):
             pass
     return format_response(success=False, message="任务不存在或进度不可用")
 
-@app.route('/')
+@ocr_bp.route('/')
 def index():
     """
     服务器信息
@@ -144,7 +150,7 @@ def index():
         }
     )
 
-@app.route('/api/health')
+@ocr_bp.route('/api/health')
 def health():
     """
     健康检查接口
@@ -164,7 +170,7 @@ def health():
             data={'status': 'unhealthy'}
         )
 
-@app.route('/api/status')
+@ocr_bp.route('/api/status')
 def status():
     """
     服务状态接口
@@ -188,7 +194,7 @@ def status():
             message=f"获取状态失败: {str(e)}"
         )
 
-@app.route('/api/ocr/file', methods=['POST'])
+@ocr_bp.route('/api/ocr/file', methods=['POST'])
 def ocr_file():
     """
     识别上传的文件
@@ -300,7 +306,7 @@ def ocr_file():
             message=f"服务器错误: {str(e)}"
         )
 
-@app.route('/api/ocr/base64', methods=['POST'])
+@ocr_bp.route('/api/ocr/base64', methods=['POST'])
 def ocr_base64():
     """
     识别base64编码的图片
@@ -351,7 +357,7 @@ def ocr_base64():
             message=f"服务器错误: {str(e)}"
         )
 
-@app.route('/api/ocr/url', methods=['POST'])
+@ocr_bp.route('/api/ocr/url', methods=['POST'])
 def ocr_url():
     """
     识别网络图片URL
@@ -404,7 +410,7 @@ def ocr_url():
             message=f"服务器错误: {str(e)}"
         )
 
-@app.route('/api/ocr/document', methods=['POST'])
+@ocr_bp.route('/api/ocr/document', methods=['POST'])
 def ocr_document():
     """
     识别PDF等文档（支持多页）
@@ -505,7 +511,7 @@ def ocr_document():
             message=f"服务器错误: {str(e)}"
         )
 
-@app.route('/api/ocr/batch', methods=['POST'])
+@ocr_bp.route('/api/ocr/batch', methods=['POST'])
 def ocr_batch():
     """
     批量识别多个文件
