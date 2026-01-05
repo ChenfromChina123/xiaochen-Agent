@@ -10,3 +10,9 @@ urllib3>=2.0.0
 # 彩色终端输出
 colorama>=0.4.6
 
+# 键盘监听 (注意：Linux 下可能需要 root 权限)
+keyboard>=0.13.5
+
+# 图像处理 (OCR与剪贴板支持)
+Pillow>=10.0.0
+
