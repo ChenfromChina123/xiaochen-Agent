@@ -136,14 +136,47 @@ class OCREngine:
                 cpu_threads = self.config.get("cpu_threads", 1)
                 enable_mkldnn = self.config.get("enable_mkldnn", False)
                 
+                # 指定模型目录 (如果是 Linux 且配置了 models_path)
+                det_model_dir = None
+                rec_model_dir = None
+                cls_model_dir = None
+                
+                models_path = self.config.get("models_path")
+                if models_path and is_linux:
+                    # 尝试将相对路径转为绝对路径
+                    models_path = self._get_absolute_path(models_path)
+                    print(f"[信息] 尝试加载本地模型: {models_path}")
+                    
+                    # 检查模型子目录是否存在
+                    if os.path.exists(os.path.join(models_path, "ocr-v4/ch/ch_PP-OCRv4_det_infer")):
+                         det_model_dir = os.path.join(models_path, "ocr-v4/ch/ch_PP-OCRv4_det_infer")
+                    
+                    if os.path.exists(os.path.join(models_path, "ocr-v4/ch/ch_PP-OCRv4_rec_infer")):
+                         rec_model_dir = os.path.join(models_path, "ocr-v4/ch/ch_PP-OCRv4_rec_infer")
+                         
+                    if os.path.exists(os.path.join(models_path, "ocr-v4/ch/ch_ppocr_mobile_v2.0_cls_infer")):
+                         cls_model_dir = os.path.join(models_path, "ocr-v4/ch/ch_ppocr_mobile_v2.0_cls_infer")
+
                 # 显式传递内存优化参数
                 try:
-                    self.ocr_instance = PaddleOCR(
-                        use_angle_cls=use_angle_cls,
-                        lang=lang,
-                        cpu_threads=cpu_threads,
-                        enable_mkldnn=enable_mkldnn
-                    )
+                    # 构建初始化参数字典
+                    ocr_params = {
+                        "use_angle_cls": use_angle_cls,
+                        "lang": lang,
+                        "cpu_threads": cpu_threads,
+                        "enable_mkldnn": enable_mkldnn,
+                        "use_gpu": False,  # 强制禁用 GPU
+                        "show_log": False  # 减少日志输出
+                    }
+                    
+                    # 如果找到了本地模型路径，则添加进去
+                    if det_model_dir: ocr_params["det_model_dir"] = det_model_dir
+                    if rec_model_dir: ocr_params["rec_model_dir"] = rec_model_dir
+                    if cls_model_dir: ocr_params["cls_model_dir"] = cls_model_dir
+                    
+                    print(f"[信息] PaddleOCR 初始化参数: {ocr_params}")
+                    self.ocr_instance = PaddleOCR(**ocr_params)
+
                 except TypeError:
                     # 如果不支持某些参数，尝试最简初始化
                     print("[警告] PaddleOCR 不支持部分优化参数，尝试基础初始化...")
