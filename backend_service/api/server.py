@@ -28,9 +28,6 @@ CORS(app)  # 允许跨域请求
 # 创建 Blueprint 以支持 /ocr 前缀
 ocr_bp = Blueprint('ocr', __name__)
 
-# 注册 Blueprint (全局注册，支持 gunicorn 等部署方式)
-app.register_blueprint(ocr_bp, url_prefix='/ocr')
-
 # 配置
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 最大50MB
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
@@ -688,6 +685,9 @@ def internal_server_error(error):
         code=500,
         message="服务器内部错误"
     ), 500
+
+# 注册 Blueprint
+app.register_blueprint(ocr_bp, url_prefix='/ocr')
 
 # ==================== 主程序 ====================
 
