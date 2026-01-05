@@ -9,7 +9,18 @@
 
 ### Linux/Mac
 ```bash
-chmod +x scripts/start_server.sh
+# 常规启动
+chmod +x scripts/*.sh
+./scripts/start_server.sh
+
+# 停止服务
+./scripts/stop_server.sh
+```
+
+### 持久化启动 (Linux)
+```bash
+# 服务将以后台模式运行，日志保存在 backend_service/scripts/logs/ocr_server.log
+cd backend_service
 ./scripts/start_server.sh
 ```
 

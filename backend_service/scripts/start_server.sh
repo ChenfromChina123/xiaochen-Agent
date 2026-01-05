@@ -31,7 +31,27 @@ else
 fi
 echo ""
 
-echo "[3] 启动OCR服务..."
+echo "[3] 启动OCR服务 (持久化)..."
 echo ""
-python3 api/server.py
+
+# 创建日志目录
+mkdir -p logs
+
+# 检查端口 4999 是否被占用
+PORT=4999
+PID=$(lsof -t -i:$PORT)
+if [ ! -z "$PID" ]; then
+    echo "[提示] 端口 $PORT 已被占用 (PID: $PID)，服务正在运行中。"
+    echo "[提示] 如果需要重启，请先运行 ./stop_server.sh"
+    exit 0
+fi
+
+# 使用 nohup 后台启动
+nohup python3 api/server.py > logs/ocr_server.log 2>&1 &
+NEW_PID=$!
+
+echo $NEW_PID > ocr_server.pid
+echo "[成功] OCR服务已在后台启动，PID: $NEW_PID"
+echo "[提示] 日志文件: backend_service/scripts/logs/ocr_server.log"
+echo "[提示] 使用 ./stop_server.sh 停止服务"
 
