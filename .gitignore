@@ -29,3 +29,6 @@ logs/
 
 .DS_Store
 Thumbs.db
+
+# OCR Backend Service
+backend_service/
