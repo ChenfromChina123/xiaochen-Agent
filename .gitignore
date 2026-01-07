@@ -37,3 +37,12 @@ backend_service/
 dist/
 build/
 *.spec
+
+# 测试脚本与临时图片
+create_test_img*.py
+test_ocr_upload*.png
+
+# IDE与环境配置
+.trae/
+.vscode/
+.idea/
