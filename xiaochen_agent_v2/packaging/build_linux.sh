@@ -56,6 +56,10 @@ pip install pyinstaller
 
 # [3/4] 构建二进制文件
 echo "[3/4] Building Binary..."
+# 清理旧的构建文件和 spec 文件
+echo "Cleaning old build files..."
+rm -rf build dist *.spec
+
 # 确保在项目根目录运行 pyinstaller，以便正确处理导入
 # 计算 launcher.py 相对于项目根目录的路径
 if [ "$LAUNCHER_PATH" = "$PACKAGING_DIR/launcher.py" ]; then
@@ -68,7 +72,8 @@ fi
 
 # 构建 PyInstaller 命令
 # 使用 --paths "." 添加当前目录到 Python 路径，这样 PyInstaller 可以找到 xiaochen_agent_v2 包
-PYINSTALLER_CMD="pyinstaller --noconfirm --onefile --console --name xiaochen-agent --paths ."
+# 使用 --clean 强制清理缓存
+PYINSTALLER_CMD="pyinstaller --clean --noconfirm --onefile --console --name xiaochen-agent --paths ."
 
 # 添加静态文件（如果存在）
 if [ -d "static" ]; then
