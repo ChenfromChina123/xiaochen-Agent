@@ -2,10 +2,16 @@
 # 设置路径
 PACKAGING_DIR=$(cd "$(dirname "$0")"; pwd)
 # 尝试定位根目录（寻找 launcher.py）
-if [ -f "$PACKAGING_DIR/../launcher.py" ]; then
+if [ -f "$PACKAGING_DIR/launcher.py" ]; then
+    # launcher.py 在 packaging 目录中，项目根目录是 packaging 的父目录
     PROJECT_ROOT=$(cd "$PACKAGING_DIR/.."; pwd)
+    LAUNCHER_PATH="$PACKAGING_DIR/launcher.py"
+elif [ -f "$PACKAGING_DIR/../launcher.py" ]; then
+    PROJECT_ROOT=$(cd "$PACKAGING_DIR/.."; pwd)
+    LAUNCHER_PATH="$PROJECT_ROOT/launcher.py"
 elif [ -f "$PACKAGING_DIR/../../launcher.py" ]; then
     PROJECT_ROOT=$(cd "$PACKAGING_DIR/../.."; pwd)
+    LAUNCHER_PATH="$PROJECT_ROOT/launcher.py"
 else
     echo "ERROR: Could not find launcher.py in parent directories."
     exit 1
@@ -51,10 +57,18 @@ pip install pyinstaller
 # [3/4] 构建二进制文件
 echo "[3/4] Building Binary..."
 # 确保在项目根目录运行 pyinstaller，以便正确处理导入
+# 计算 launcher.py 相对于项目根目录的路径
+if [ "$LAUNCHER_PATH" = "$PACKAGING_DIR/launcher.py" ]; then
+    # launcher.py 在 packaging 目录中
+    LAUNCHER_RELATIVE="packaging/launcher.py"
+else
+    # launcher.py 在项目根目录中
+    LAUNCHER_RELATIVE="launcher.py"
+fi
 pyinstaller --noconfirm --onefile --console \
     --name "xiaochen-agent" \
     --add-data "xiaochen_agent_v2:xiaochen_agent_v2" \
-    "launcher.py"
+    "$LAUNCHER_RELATIVE"
 
 if [ $? -eq 0 ]; then
     echo "[4/4] Done! Binary is in dist/ folder."
