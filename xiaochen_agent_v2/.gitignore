@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Distribution / packaging
+dist/
+build/
+*.spec
+
+# OCR results and temporary files
+storage/ocr_results/
+storage/pastes/
+xiaochen_agent_v2/storage/pastes/
+
+# Logs and user configs
+logs/
+config.json
+ocr_config.json
+.python_path
+
+# System files
+.DS_Store
+Thumbs.db
