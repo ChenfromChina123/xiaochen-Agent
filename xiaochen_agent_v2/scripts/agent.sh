@@ -28,5 +28,7 @@ else
 fi
 
 # 运行程序
+echo "正在从 $ROOT_DIR 启动小晨终端助手..."
+cd "$ROOT_DIR"
 $PYTHON_CMD -m xiaochen_agent_v2 "$@"
 
