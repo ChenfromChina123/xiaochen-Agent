@@ -1,7 +1,16 @@
 #!/bin/bash
 # 设置路径
 PACKAGING_DIR=$(cd "$(dirname "$0")"; pwd)
-PROJECT_ROOT=$(cd "$PACKAGING_DIR/.."; pwd)
+# 尝试定位根目录（寻找 launcher.py）
+if [ -f "$PACKAGING_DIR/../launcher.py" ]; then
+    PROJECT_ROOT=$(cd "$PACKAGING_DIR/.."; pwd)
+elif [ -f "$PACKAGING_DIR/../../launcher.py" ]; then
+    PROJECT_ROOT=$(cd "$PACKAGING_DIR/../.."; pwd)
+else
+    echo "ERROR: Could not find launcher.py in parent directories."
+    exit 1
+fi
+
 cd "$PROJECT_ROOT"
 
 echo "========================================"
