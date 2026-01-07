@@ -32,3 +32,8 @@ Thumbs.db
 
 # OCR Backend Service
 backend_service/
+
+# PyInstaller产物
+dist/
+build/
+*.spec

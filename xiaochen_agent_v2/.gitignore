@@ -10,6 +10,8 @@ ENV/
 dist/
 build/
 *.spec
+packaging/dist/
+packaging/build/
 
 # OCR results and temporary files
 storage/ocr_results/
