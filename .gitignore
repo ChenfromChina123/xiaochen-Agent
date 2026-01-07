@@ -37,6 +37,10 @@ backend_service/
 dist/
 build/
 *.spec
+# 但允许自定义的 spec 文件
+!xiaochen_agent_v2/packaging/xiaochen_linux.spec
+!xiaochen_agent_v2/packaging/xiaochen_agent.spec
+!xiaochen_agent_v2/packaging/xiaochen_terminal.spec
 
 # 测试脚本与临时图片
 create_test_img*.py
