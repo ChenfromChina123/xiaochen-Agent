@@ -13,18 +13,22 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 ROOT_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # 检查 Python 是否安装
-if ! command -v python3 &> /dev/null; then
-    echo "[错误] 未检测到 Python 3，请先安装 Python 3.7+"
+if command -v python3.13 &> /dev/null; then
+    PY_CMD=python3.13
+elif command -v python3 &> /dev/null; then
+    PY_CMD=python3
+else
+    echo "[错误] 未检测到 Python 3，请先安装 Python 3.7+ (推荐使用 3.13)"
     exit 1
 fi
 
 echo "[1/4] 检测到 Python 环境"
-python3 --version
+$PY_CMD --version
 
 # 安装依赖
 echo ""
 echo "[2/4] 安装依赖包..."
-pip3 install -r "$ROOT_DIR/requirements.txt"
+$PY_CMD -m pip install -r "$ROOT_DIR/requirements.txt"
 
 # 创建配置文件（如果不存在）
 echo ""

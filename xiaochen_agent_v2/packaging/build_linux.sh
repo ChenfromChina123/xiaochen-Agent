@@ -6,7 +6,9 @@ echo "  Xiaochen Terminal Agent Linux Builder"
 echo "========================================"
 
 # Detect Python
-if command -v python3 &> /dev/null; then
+if command -v python3.13 &> /dev/null; then
+    PY_CMD=python3.13
+elif command -v python3 &> /dev/null; then
     PY_CMD=python3
 elif command -v python &> /dev/null; then
     PY_CMD=python
