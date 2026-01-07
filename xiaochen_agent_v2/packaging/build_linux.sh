@@ -65,10 +65,26 @@ else
     # launcher.py 在项目根目录中
     LAUNCHER_RELATIVE="launcher.py"
 fi
-pyinstaller --noconfirm --onefile --console \
-    --name "xiaochen-agent" \
-    --add-data "xiaochen_agent_v2:xiaochen_agent_v2" \
-    "$LAUNCHER_RELATIVE"
+
+# 构建 PyInstaller 命令
+# 使用 --paths "." 添加当前目录到 Python 路径，这样 PyInstaller 可以找到 xiaochen_agent_v2 包
+PYINSTALLER_CMD="pyinstaller --noconfirm --onefile --console --name xiaochen-agent --paths ."
+
+# 添加静态文件（如果存在）
+if [ -d "static" ]; then
+    PYINSTALLER_CMD="$PYINSTALLER_CMD --add-data static:static"
+fi
+
+# 添加配置文件（如果存在）
+if [ -f "config.json" ]; then
+    PYINSTALLER_CMD="$PYINSTALLER_CMD --add-data config.json:."
+fi
+if [ -f "ocr_config.json" ]; then
+    PYINSTALLER_CMD="$PYINSTALLER_CMD --add-data ocr_config.json:."
+fi
+
+# 执行构建
+$PYINSTALLER_CMD "$LAUNCHER_RELATIVE"
 
 if [ $? -eq 0 ]; then
     echo "[4/4] Done! Binary is in dist/ folder."
