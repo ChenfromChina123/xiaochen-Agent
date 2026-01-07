@@ -6,7 +6,10 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 ROOT_DIR="$( dirname "$SCRIPT_DIR" )"
 
 # 设置 PYTHONPATH 以支持模块导入
+# 将当前目录加入 PYTHONPATH，确保 Python 能找到 xiaochen_agent_v2 模块
 export PYTHONPATH="$ROOT_DIR:$PYTHONPATH"
+# 如果上一层目录是包名，也尝试把上层目录加入（针对不同的部署结构）
+export PYTHONPATH="$(dirname "$ROOT_DIR"):$PYTHONPATH"
 
 # 如果设置了 XIAOCHEN_START_CWD，则切换到该目录
 if [ ! -z "$XIAOCHEN_START_CWD" ]; then
