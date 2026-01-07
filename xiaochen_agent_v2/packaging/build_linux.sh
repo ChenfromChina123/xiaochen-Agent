@@ -55,6 +55,10 @@ else
 fi
 pip install pyinstaller
 
+# 将 xiaochen_agent_v2 包以可编辑模式安装到虚拟环境，这样 PyInstaller 可以正确识别它
+echo "Installing xiaochen_agent_v2 package in editable mode..."
+pip install -e xiaochen_agent_v2
+
 # [3/4] 构建二进制文件
 echo "[3/4] Building Binary..."
 # 清理旧的构建文件和 spec 文件
@@ -73,11 +77,10 @@ else
 fi
 
 # 构建 PyInstaller 命令
-# 使用 --paths "." 添加当前目录到 Python 路径，这样 PyInstaller 可以找到 xiaochen_agent_v2 包
+# 使用 --paths "." 添加当前目录到 Python 路径
 # 使用 --clean 强制清理缓存
-# 使用 --hidden-import 显式包含 xiaochen_agent_v2 包，确保 PyInstaller 包含它
-# 使用 --collect-all 自动收集 xiaochen_agent_v2 包及其所有子模块和数据文件
-PYINSTALLER_CMD="pyinstaller --clean --noconfirm --onefile --console --name xiaochen-agent --paths . --hidden-import xiaochen_agent_v2 --collect-all xiaochen_agent_v2"
+# 由于已经将包安装到虚拟环境，PyInstaller 可以自动识别和包含它
+PYINSTALLER_CMD="pyinstaller --clean --noconfirm --onefile --console --name xiaochen-agent --paths ."
 
 # 添加静态文件（如果存在）
 if [ -d "xiaochen_agent_v2/static" ]; then
