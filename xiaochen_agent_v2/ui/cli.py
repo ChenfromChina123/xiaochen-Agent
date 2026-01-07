@@ -35,6 +35,15 @@ def run_cli() -> None:
         except Exception:
             pass
 
+    start_cwd = os.environ.get("XIAOCHEN_START_CWD") or os.environ.get("XIAOCHEN_WORKDIR")
+    if start_cwd:
+        target_dir = os.path.expandvars(str(start_cwd))
+        if os.path.isdir(target_dir):
+            try:
+                os.chdir(target_dir)
+            except Exception:
+                pass
+
     def _normalize_user_input(text: str) -> str:
         """
         清理方向键等控制序列，避免终端不支持行编辑时污染输入内容。

@@ -31,6 +31,7 @@
   - 🔍 搜索文件
   - 📝 任务管理
 - **结果格式化**：优化工具执行结果的显示，避免信息过载
+- **终端截断保护**：当终端执行命令返回内容过长时（超过 8000 字符），自动截断并仅保留尾部关键信息，防止显示溢出
 - **进度提示**：清晰显示任务执行进度（如 [1/5]）
 
 ### ⚡ 中断控制
@@ -43,6 +44,7 @@
 - **缓存优化**：智能缓存系统，减少 API 调用成本
 - **精准切片读取**：read_file 必须提供 start_line/end_line，窗口默认最多 160 行，重复读取会跳过输出
 - **操作回滚**：支持撤销上一次文件操作
+- **目录同步切换**：AI 使用 `cd` 命令切换目录时，Agent 进程会同步更新当前工作目录，确保后续操作环境一致
 - **选中缩进/减少缩进**：支持对指定行范围按空格批量缩进与减少缩进
 - **跨文件复制粘贴**：支持将 A 文件的指定行范围复制到寄存器，并粘贴到 B 文件的指定位置
 - **任务管理**：内置任务列表，跟踪执行进度
@@ -124,11 +126,13 @@ python -m xiaochen_agent_v2
 set VOID_API_KEY=your_api_key_here
 set VOID_BASE_URL=https://api.deepseek.com
 set VOID_MODEL=deepseek-chat
+set XIAOCHEN_START_CWD=D:\your\project\path  # 设置 Agent 启动时的初始目录
 
 # Linux/Mac
 export VOID_API_KEY=your_api_key_here
 export VOID_BASE_URL=https://api.deepseek.com
 export VOID_MODEL=deepseek-chat
+export XIAOCHEN_START_CWD=/your/project/path
 ```
 
 **方式 C：每次启动时输入**

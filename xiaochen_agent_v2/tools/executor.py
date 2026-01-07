@@ -24,6 +24,7 @@ from ..utils.files import (
 )
 from ..utils.display import print_tool_execution_header
 from ..utils.logs import append_edit_history
+from ..utils.terminal import clip_terminal_return_text_head_tail
 from .web_search import web_search, visit_page, format_search_results
 from .ocr import ocr_image, ocr_document
 from ..core.utils import validate_python_file
@@ -509,6 +510,12 @@ class Tools:
             return f"FAILURE: {str(e)}"
 
     def run_command(self, t: Dict[str, Any]) -> str:
+        """
+        执行终端命令。
+
+        - 支持通过 cd 持久化切换 Agent 工作目录（影响后续命令与工具的相对路径解析）。
+        - 支持常见的环境变量设置语法在当前进程内持久化（set / $env:）。
+        """
         cmd_text = str(t["command"])
         is_long = str(t.get("is_long_running", "false")).lower() == "true"
         cwd = t.get("cwd")
@@ -516,6 +523,122 @@ class Tools:
         commands = [c.strip() for c in cmd_text.splitlines() if c.strip()]
         if not commands:
             return "FAILURE: Empty command"
+
+        def _resolve_dir(raw: Any, base_dir: str) -> Tuple[Optional[str], Optional[str]]:
+            """
+            将 raw 解析为可用的绝对目录。
+
+            Returns:
+                (abs_dir, err) - abs_dir 为 None 表示失败，err 给出原因
+            """
+            if raw is None:
+                return None, None
+            s = str(raw).strip()
+            if not s:
+                return None, None
+            s = os.path.expandvars(s)
+            if not os.path.isabs(s):
+                s = os.path.abspath(os.path.join(base_dir, s))
+            if not os.path.isdir(s):
+                return None, f"目录不存在: {s}"
+            return s, None
+
+        def _set_process_cwd(target_dir: str) -> Optional[str]:
+            """
+            将当前进程工作目录切换到 target_dir。
+
+            Returns:
+                err - None 表示成功，否则为错误信息
+            """
+            try:
+                os.chdir(target_dir)
+                return None
+            except Exception as e:
+                return str(e)
+
+        def _try_handle_set_env(cmd_line: str) -> Optional[str]:
+            """
+            尝试处理环境变量设置并持久化到当前进程（不启动子进程）。
+
+            支持：
+            - cmd: set VAR=VALUE
+            - PowerShell: $env:VAR=VALUE 或 $env:VAR = "VALUE"
+
+            Returns:
+                若命中则返回结果文本（SUCCESS/FAILURE），否则返回 None。
+            """
+            s = str(cmd_line or "").strip()
+            if not s:
+                return None
+
+            m_cmd = re.match(r"(?is)^\s*set\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$", s)
+            if m_cmd:
+                key = m_cmd.group(1)
+                val = m_cmd.group(2)
+                if val == "":
+                    os.environ.pop(key, None)
+                    return f"SUCCESS: Env unset\nCWD: {os.getcwd()}\nEnv: {key}="
+                os.environ[key] = val
+                return f"SUCCESS: Env set\nCWD: {os.getcwd()}\nEnv: {key}={val}"
+
+            m_ps = re.match(
+                r"(?is)^\s*\$env:([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+?)\s*$",
+                s,
+            )
+            if m_ps:
+                key = m_ps.group(1)
+                val = m_ps.group(2).strip()
+                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                    val = val[1:-1]
+                os.environ[key] = val
+                return f"SUCCESS: Env set\nCWD: {os.getcwd()}\nEnv: {key}={val}"
+
+            return None
+
+        def _try_handle_cd(cmd_line: str) -> Optional[Tuple[Optional[str], Optional[str]]]:
+            """
+            尝试处理 cd 命令并持久化到当前进程（不启动子进程）。
+
+            Returns:
+                若命中返回 (new_dir, err)，否则返回 None。
+                - new_dir: 成功时为新的绝对目录
+                - err: 失败原因
+            """
+            s = str(cmd_line or "").strip()
+            if not s:
+                return None
+
+            m = re.match(r"(?is)^\s*cd(?:\s+/d)?(?:\s+(.+?))?\s*$", s)
+            if not m:
+                return None
+            arg = (m.group(1) or "").strip()
+            if not arg:
+                return os.getcwd(), None
+            arg = arg.strip()
+            if (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'")):
+                arg = arg[1:-1]
+            arg = os.path.expandvars(arg)
+            if not os.path.isabs(arg):
+                arg = os.path.abspath(os.path.join(os.getcwd(), arg))
+            if not os.path.isdir(arg):
+                return None, f"目录不存在: {arg}"
+            err = _set_process_cwd(arg)
+            if err:
+                return None, err
+            return os.getcwd(), None
+
+        base_dir = os.getcwd()
+        resolved_cwd, cwd_err = _resolve_dir(cwd, base_dir)
+        if cwd_err:
+            return clip_terminal_return_text_head_tail(
+                f"FAILURE: Invalid cwd\nCWD: {os.getcwd()}\nError: {cwd_err}"
+            )
+        if resolved_cwd:
+            err = _set_process_cwd(resolved_cwd)
+            if err:
+                return clip_terminal_return_text_head_tail(
+                    f"FAILURE: Invalid cwd\nCWD: {os.getcwd()}\nError: {err}"
+                )
         
         # Only execute the first command for now if multiple, or loop?
         # Agent implementation loops but returns only one observation usually?
@@ -533,11 +656,36 @@ class Tools:
             if any(d in cmd.lower() for d in dangerousCmds):
                 results.append(f"FAILURE: Dangerous command blocked: {cmd}")
                 continue
+
+            env_result = _try_handle_set_env(cmd)
+            if env_result is not None:
+                results.append(env_result)
+                continue
+
+            if "&&" in cmd:
+                left, _sep, right = cmd.partition("&&")
+                cd_attempt = _try_handle_cd(left)
+                if cd_attempt is not None:
+                    new_dir, err = cd_attempt
+                    if err:
+                        results.append(f"FAILURE: cd failed\nCWD: {os.getcwd()}\nCommand: {left.strip()}\nError: {err}")
+                        continue
+                    results.append(f"SUCCESS: Directory changed\nCWD: {new_dir}\nCommand: {left.strip()}")
+                    cmd = right.strip()
+                    if not cmd:
+                        continue
+
+            cd_attempt = _try_handle_cd(cmd)
+            if cd_attempt is not None:
+                new_dir, err = cd_attempt
+                if err:
+                    results.append(f"FAILURE: cd failed\nCWD: {os.getcwd()}\nCommand: {cmd}\nError: {err}")
+                else:
+                    results.append(f"SUCCESS: Directory changed\nCWD: {new_dir}\nCommand: {cmd}")
+                continue
             
             try:
-                run_cwd = None
-                if cwd is not None and str(cwd).strip():
-                    run_cwd = os.path.abspath(str(cwd).strip())
+                run_cwd = os.getcwd()
                 success, tid, output, error = self.agent.terminalManager.run_command(cmd, is_long_running=is_long, cwd=run_cwd)
                 if success:
                     status = self.agent.terminalManager.get_terminal_status(tid)
@@ -547,6 +695,7 @@ class Tools:
                             "SUCCESS: Command started (running)\n"
                             f"Terminal ID: {tid}\n"
                             f"Command: {cmd}\n"
+                            f"CWD: {run_cwd}\n"
                             f"{output}\n"
                             f"{self.agent.renderRunningTerminals()}"
                         )
@@ -555,6 +704,7 @@ class Tools:
                             "SUCCESS: Command executed\n"
                             f"Terminal ID: {tid}\n"
                             f"Command: {cmd}\n"
+                            f"CWD: {run_cwd}\n"
                             f"{output}"
                         )
                 else:
@@ -562,6 +712,7 @@ class Tools:
                         "FAILURE: Command failed\n"
                         f"Terminal ID: {tid}\n"
                         f"Command: {cmd}\n"
+                        f"CWD: {run_cwd}\n"
                         f"{error}\n"
                         f"{output}"
                     )
@@ -569,9 +720,10 @@ class Tools:
                 self.agent.printRunCommandSummary(tid=tid, cmd=cmd, success=success, output=output, error=error)
                 results.append(obs)
             except Exception as e:
-                results.append(f"FAILURE: {str(e)}")
+                results.append(f"FAILURE: {str(e)}\nCWD: {os.getcwd()}\nCommand: {cmd}")
         
-        return "\n\n".join(results)
+        combined = "\n\n".join(results)
+        return clip_terminal_return_text_head_tail(combined)
 
     def task_add(self, t: Dict[str, Any]) -> str:
         content = str(t.get("content") or "").strip()

@@ -8,6 +8,71 @@ from dataclasses import dataclass, field
 from .console import Fore, Style
 from .process_tracker import ProcessTracker
 
+DEFAULT_MAX_TERMINAL_RETURN_CHARS = 8000
+
+def clip_terminal_return_text(text: str, max_chars: int = DEFAULT_MAX_TERMINAL_RETURN_CHARS) -> str:
+    """
+    将终端输出按字符数截断为“仅保留尾部”。
+
+    Args:
+        text: 原始输出文本
+        max_chars: 最大保留字符数
+
+    Returns:
+        截断后的文本（若未超长则原样返回）
+    """
+    if not text:
+        return ""
+    max_chars = int(max_chars or 0)
+    if max_chars <= 0:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    removed = len(text) - max_chars
+    tail = text[-max_chars:]
+    return f"... (输出过长，已截断 {removed} 字符，仅显示末尾 {max_chars} 字符)\n{tail}"
+
+def clip_terminal_return_text_head_tail(
+    text: str,
+    max_chars: int = DEFAULT_MAX_TERMINAL_RETURN_CHARS,
+    head_chars: int = 1200,
+) -> str:
+    """
+    将终端输出截断为“保留少量头部 + 保留尾部”。
+
+    适用于既要保留关键信息（头部如状态/标题），又要保留最新日志（尾部）的场景。
+
+    Args:
+        text: 原始输出文本
+        max_chars: 最大保留字符数（总长度上限）
+        head_chars: 头部保留字符数（不足时会自动调整以保障尾部最小长度）
+
+    Returns:
+        截断后的文本（若未超长则原样返回）
+    """
+    if not text:
+        return ""
+    max_chars = int(max_chars or 0)
+    if max_chars <= 0:
+        return ""
+    if len(text) <= max_chars:
+        return text
+
+    marker = "\n... (输出过长，已截断，以下为末尾输出)\n"
+    if max_chars <= len(marker) + 1:
+        return clip_terminal_return_text(text, max_chars=max_chars)
+
+    head_chars = max(0, int(head_chars or 0))
+    head_chars = min(head_chars, max_chars - len(marker) - 1)
+
+    min_tail = 200
+    if max_chars - head_chars - len(marker) < min_tail:
+        head_chars = max(0, max_chars - len(marker) - min_tail)
+
+    tail_chars = max_chars - head_chars - len(marker)
+    tail = text[-tail_chars:] if tail_chars > 0 else ""
+    return text[:head_chars] + marker + tail
+
 @dataclass
 class TerminalProcess:
     id: str
@@ -89,13 +154,13 @@ class TerminalManager:
                         term.exit_code = proc.returncode
                         ProcessTracker().update_status(proc_uuid, "failed" if proc.returncode != 0 else "completed", proc.returncode)
                         
-                        output = f"Stdout:\n{stdout}\nStderr:\n{stderr}"
+                        output = clip_terminal_return_text(f"Stdout:\n{stdout}\nStderr:\n{stderr}")
                         del self.terminals[tid]
                         return False, tid, output, f"Process exited early with code {proc.returncode}"
                     time.sleep(0.5)
 
                 # 10 秒后仍然存活，返回已捕获的部分输出
-                initial_output = "".join(term.output)
+                initial_output = clip_terminal_return_text("".join(term.output))
                 return True, tid, f"Initial Output (10s):\n{initial_output}", ""
             else:
                 # 短期任务：等待执行完毕并捕获输出
@@ -104,7 +169,7 @@ class TerminalManager:
                     term.exit_code = proc.returncode
                     ProcessTracker().update_status(proc_uuid, "completed" if proc.returncode == 0 else "failed", proc.returncode)
                     
-                    output = f"Stdout:\n{stdout}\nStderr:\n{stderr}"
+                    output = clip_terminal_return_text(f"Stdout:\n{stdout}\nStderr:\n{stderr}")
                     del self.terminals[tid]
                     if proc.returncode == 0:
                         return True, tid, output, ""
@@ -114,7 +179,7 @@ class TerminalManager:
                     term.is_long_running = True
                     start_monitor()
                     time.sleep(0.2)
-                    initial_output = "".join(term.output)
+                    initial_output = clip_terminal_return_text("".join(term.output))
                     output = (
                         "Status: running (timeout, may be waiting for input)\n"
                         f"Initial Output:\n{initial_output}"
@@ -166,12 +231,13 @@ class TerminalManager:
             return None
         
         term = self.terminals[tid]
+        output = clip_terminal_return_text("".join(term.output[-50:]))
         return {
             "id": term.id,
             "command": term.command,
             "is_running": term.process.poll() is None,
             "exit_code": term.exit_code,
-            "output": "".join(term.output[-50:]) # 返回最后50行输出
+            "output": output
         }
 
     def stop_terminal(self, tid: str) -> bool:

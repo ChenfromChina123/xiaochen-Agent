@@ -21,13 +21,24 @@ if defined PYTHONPATH (
     set "PYTHONPATH=%ROOT_DIR%"
 )
 
+:: Prefer Python 3.13 (py launcher), then python3.13, then python
+py -3.13 --version >nul 2>&1
+if %errorlevel% equ 0 (
+    py -3.13 -m xiaochen_agent_v2 %*
+    goto :EOF
+)
+
+python3.13 --version >nul 2>&1
+if %errorlevel% equ 0 (
+    python3.13 -m xiaochen_agent_v2 %*
+    goto :EOF
+)
+
 :: Try to find Python path from config if global 'python' fails
 set "PYTHON_EXE=python"
 
-:: Check if global python works
 where %PYTHON_EXE% >nul 2>&1
 if errorlevel 1 (
-    :: Global python failed, check for saved path in package dir
     if exist "%PACKAGE_DIR%\.python_path" (
         for /f "usebackq delims=" %%i in ("%PACKAGE_DIR%\.python_path") do (
             set "SAVED_PYTHON=%%i"
@@ -39,7 +50,7 @@ if errorlevel 1 (
     )
 )
 
-:: Run the agent
+:: Run the agent (fallback)
 "!PYTHON_EXE!" -m xiaochen_agent_v2 %*
 
 endlocal
