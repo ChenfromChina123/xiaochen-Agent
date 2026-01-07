@@ -73,7 +73,9 @@ fi
 # 构建 PyInstaller 命令
 # 使用 --paths "." 添加当前目录到 Python 路径，这样 PyInstaller 可以找到 xiaochen_agent_v2 包
 # 使用 --clean 强制清理缓存
-PYINSTALLER_CMD="pyinstaller --clean --noconfirm --onefile --console --name xiaochen-agent --paths ."
+# 使用 --hidden-import 显式包含 xiaochen_agent_v2 包，确保 PyInstaller 包含它
+# 使用 --collect-all 自动收集 xiaochen_agent_v2 包及其所有子模块和数据文件
+PYINSTALLER_CMD="pyinstaller --clean --noconfirm --onefile --console --name xiaochen-agent --paths . --hidden-import xiaochen_agent_v2 --collect-all xiaochen_agent_v2"
 
 # 添加静态文件（如果存在）
 if [ -d "static" ]; then
