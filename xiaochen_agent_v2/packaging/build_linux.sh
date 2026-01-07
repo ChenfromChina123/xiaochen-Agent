@@ -3,8 +3,9 @@
 PACKAGING_DIR=$(cd "$(dirname "$0")"; pwd)
 # 尝试定位根目录（寻找 launcher.py）
 if [ -f "$PACKAGING_DIR/launcher.py" ]; then
-    # launcher.py 在 packaging 目录中，项目根目录是 packaging 的父目录
-    PROJECT_ROOT=$(cd "$PACKAGING_DIR/.."; pwd)
+    # launcher.py 在 packaging 目录中
+    # packaging 的父目录是 xiaochen_agent_v2，再往上一级才是项目根目录
+    PROJECT_ROOT=$(cd "$PACKAGING_DIR/../.."; pwd)
     LAUNCHER_PATH="$PACKAGING_DIR/launcher.py"
 elif [ -f "$PACKAGING_DIR/../launcher.py" ]; then
     PROJECT_ROOT=$(cd "$PACKAGING_DIR/.."; pwd)
@@ -46,10 +47,10 @@ source venv/bin/activate
 # [2/4] 安装依赖
 echo "[2/4] Installing requirements..."
 pip install --upgrade pip
-if [ -f "requirements.txt" ]; then
-    pip install -r requirements.txt
+if [ -f "xiaochen_agent_v2/requirements.txt" ]; then
+    pip install -r xiaochen_agent_v2/requirements.txt
 else
-    echo "ERROR: requirements.txt not found in $PROJECT_ROOT"
+    echo "ERROR: requirements.txt not found in $PROJECT_ROOT/xiaochen_agent_v2"
     exit 1
 fi
 pip install pyinstaller
@@ -64,7 +65,8 @@ rm -rf build dist *.spec
 # 计算 launcher.py 相对于项目根目录的路径
 if [ "$LAUNCHER_PATH" = "$PACKAGING_DIR/launcher.py" ]; then
     # launcher.py 在 packaging 目录中
-    LAUNCHER_RELATIVE="packaging/launcher.py"
+    # 相对于项目根目录是 xiaochen_agent_v2/packaging/launcher.py
+    LAUNCHER_RELATIVE="xiaochen_agent_v2/packaging/launcher.py"
 else
     # launcher.py 在项目根目录中
     LAUNCHER_RELATIVE="launcher.py"
@@ -78,16 +80,16 @@ fi
 PYINSTALLER_CMD="pyinstaller --clean --noconfirm --onefile --console --name xiaochen-agent --paths . --hidden-import xiaochen_agent_v2 --collect-all xiaochen_agent_v2"
 
 # 添加静态文件（如果存在）
-if [ -d "static" ]; then
-    PYINSTALLER_CMD="$PYINSTALLER_CMD --add-data static:static"
+if [ -d "xiaochen_agent_v2/static" ]; then
+    PYINSTALLER_CMD="$PYINSTALLER_CMD --add-data xiaochen_agent_v2/static:xiaochen_agent_v2/static"
 fi
 
 # 添加配置文件（如果存在）
-if [ -f "config.json" ]; then
-    PYINSTALLER_CMD="$PYINSTALLER_CMD --add-data config.json:."
+if [ -f "xiaochen_agent_v2/config.json" ]; then
+    PYINSTALLER_CMD="$PYINSTALLER_CMD --add-data xiaochen_agent_v2/config.json:xiaochen_agent_v2"
 fi
-if [ -f "ocr_config.json" ]; then
-    PYINSTALLER_CMD="$PYINSTALLER_CMD --add-data ocr_config.json:."
+if [ -f "xiaochen_agent_v2/ocr_config.json" ]; then
+    PYINSTALLER_CMD="$PYINSTALLER_CMD --add-data xiaochen_agent_v2/ocr_config.json:xiaochen_agent_v2"
 fi
 
 # 执行构建
