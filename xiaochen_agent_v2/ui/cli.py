@@ -364,6 +364,10 @@ def run_cli() -> None:
         print("terminal <id>         查看指定终端的完整输出")
         print("terminal list         列出最近的终端输出记录")
         print("terminal stats        查看终端输出存储统计")
+        print("ps                    查看正在运行的进程")
+        print("kill <id>             终止指定进程（优雅终止）")
+        print("kill <id> -f          强制终止指定进程")
+        print("kill all              终止所有进程")
         print("save                  保存当前会话")
         print("clear                 清空当前会话历史")
         print("exit / quit           退出（自动保存 autosave）")
@@ -527,9 +531,22 @@ def run_cli() -> None:
             # 重置中断标志
             agent.interruptHandler.reset()
             
-            # 在提示符中显示当前工作目录
+            # 在提示符中显示当前工作目录和运行中的进程数
             current_dir = os.getcwd()
-            prompt = f"\n{Fore.BLUE}{current_dir}{Style.RESET_ALL}\n{Style.BRIGHT}User: "
+            
+            # 检查是否有正在运行的进程
+            try:
+                from ..utils.terminal import TerminalManager
+                tm = TerminalManager()
+                running_processes = tm.list_terminals()
+                if running_processes:
+                    proc_info = f" {Fore.YELLOW}[{len(running_processes)} 个进程运行中]{Style.RESET_ALL}"
+                else:
+                    proc_info = ""
+            except:
+                proc_info = ""
+            
+            prompt = f"\n{Fore.BLUE}{current_dir}{Style.RESET_ALL}{proc_info}\n{Style.BRIGHT}User: "
             inputOfUser = _normalize_user_input(input(prompt))
             
             # 3a. 如果是由于粘贴操作触发的自动回车，则刷新显示并恢复之前的输入内容
@@ -773,6 +790,73 @@ def run_cli() -> None:
                 except Exception as e:
                     print(f"{Fore.RED}错误: {e}{Style.RESET_ALL}")
                     continue
+            
+            if cmd == "ps" and not args:
+                # List running processes
+                from ..utils.terminal import TerminalManager
+                tm = TerminalManager()
+                terminals = tm.list_terminals()
+                
+                if not terminals:
+                    print(f"{Fore.YELLOW}没有正在运行的进程{Style.RESET_ALL}")
+                    continue
+                
+                print(f"\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}正在运行的进程{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
+                
+                for t in terminals:
+                    uptime_str = f"{int(t['uptime'])}s"
+                    if t['uptime'] >= 60:
+                        uptime_str = f"{int(t['uptime'] / 60)}m {int(t['uptime']) % 60}s"
+                    
+                    status_color = Fore.GREEN if t['is_running'] else Fore.RED
+                    status = "RUNNING" if t['is_running'] else "STOPPED"
+                    
+                    print(f"{Fore.YELLOW}[{t['id']}]{Style.RESET_ALL} {t['command'][:60]}")
+                    print(f"  状态: {status_color}{status}{Style.RESET_ALL} | PID: {t['pid']} | 运行时间: {uptime_str}")
+                    print()
+                
+                print(f"{Fore.CYAN}提示: 使用 'kill <id>' 终止进程{Style.RESET_ALL}\n")
+                continue
+            
+            if cmd == "kill":
+                if not args:
+                    print(f"{Fore.YELLOW}用法:{Style.RESET_ALL}")
+                    print(f"  kill <id>        - 终止指定进程（优雅）")
+                    print(f"  kill <id> -f     - 强制终止指定进程")
+                    print(f"  kill all         - 终止所有进程")
+                    continue
+                
+                from ..utils.terminal import TerminalManager
+                tm = TerminalManager()
+                
+                if args[0].lower() == "all":
+                    # Kill all processes
+                    terminals = tm.list_terminals()
+                    if not terminals:
+                        print(f"{Fore.YELLOW}没有正在运行的进程{Style.RESET_ALL}")
+                        continue
+                    
+                    confirm = input(f"{Fore.RED}确认终止所有 {len(terminals)} 个进程? (y/N): {Style.RESET_ALL}").strip().lower()
+                    if confirm != "y":
+                        print(f"{Fore.YELLOW}已取消{Style.RESET_ALL}")
+                        continue
+                    
+                    success, failed = tm.kill_all_terminals()
+                    print(f"{Fore.GREEN}成功终止: {success}{Style.RESET_ALL} | {Fore.RED}失败: {failed}{Style.RESET_ALL}")
+                    continue
+                
+                # Kill specific process
+                tid = args[0]
+                force = len(args) > 1 and args[1].lower() in {"-f", "--force", "force"}
+                
+                ok, msg = tm.kill_terminal(tid, force=force)
+                if ok:
+                    print(f"{Fore.GREEN}✓ {msg}{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.RED}✗ {msg}{Style.RESET_ALL}")
+                continue
             
             if cmd in ["sessions"]:
                 if args and args[0].lower() in {"-help", "help", "?"}:
