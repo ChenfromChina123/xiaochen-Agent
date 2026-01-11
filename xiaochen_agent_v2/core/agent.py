@@ -366,6 +366,8 @@ class Agent:
   <replace_in_file><path>...</path><search>...</search><replace>...</replace><count>1</count><regex>false</regex><auto_indent>true</auto_indent></replace_in_file>
 - Run command:
   <run_command><command>...</command><is_long_running>false</is_long_running><cwd>.</cwd></run_command>
+  - NEVER run interactive programs (e.g., python run.py, agent, npm start) as they will cause deadlock
+  - Use direct script execution or non-interactive commands only
 - Web search (retrieve real-time knowledge):
   <web_search><query>search keywords</query><engine>bing</engine><max_results>3</max_results></web_search>
   - query: Search keywords (automatically limited to 200 characters)
