@@ -431,7 +431,7 @@ class Agent:
         self.cacheOfProjectTree = treeOfCwd
         return self.cacheOfProjectTree
 
-    def printToolResult(self, text: str, maxChars: int = 8000) -> None:
+    def printToolResult(self, text: str, maxChars: int = 2000) -> None:
         """
         打印工具执行结果的关键摘要。
 
@@ -471,14 +471,8 @@ class Agent:
         if self.taskManager._tasks:
             task_str = f"\n\n## 📋 CURRENT TASKS\n{self.taskManager.render()}"
 
-        # 获取一级目录列表作为提示，但不展示完整树
-        try:
-            top_items = os.listdir(cwd)
-            dirs = [d for d in top_items if os.path.isdir(os.path.join(cwd, d)) and not d.startswith(".")]
-            files = [f for f in top_items if os.path.isfile(os.path.join(cwd, f)) and not f.startswith(".")]
-            hint = f"Current Directory: {cwd}\nTop-level Dirs: {dirs}\nTop-level Files: {files}"
-        except Exception:
-            hint = f"Current Directory: {cwd}"
+        # 只显示当前目录路径，不展示详细的目录和文件列表（减少token消耗）
+        hint = f"Current Directory: {cwd}"
 
         return f"""{hint}{rules_str}{task_str}
 

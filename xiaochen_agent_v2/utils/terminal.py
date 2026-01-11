@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from .console import Fore, Style
 from .process_tracker import ProcessTracker
 
-DEFAULT_MAX_TERMINAL_RETURN_CHARS = 8000
+DEFAULT_MAX_TERMINAL_RETURN_CHARS = 2000
 
 def clip_terminal_return_text(text: str, max_chars: int = DEFAULT_MAX_TERMINAL_RETURN_CHARS) -> str:
     """
@@ -30,7 +30,7 @@ def clip_terminal_return_text(text: str, max_chars: int = DEFAULT_MAX_TERMINAL_R
         return text
     removed = len(text) - max_chars
     tail = text[-max_chars:]
-    return f"... (输出过长，已截断 {removed} 字符，仅显示末尾 {max_chars} 字符)\n{tail}"
+    return f"... (输出内容过长，为节省 token 已自动截断 {removed} 字符，仅保留末尾 {max_chars} 字符)\n{tail}"
 
 def clip_terminal_return_text_head_tail(
     text: str,
@@ -58,7 +58,7 @@ def clip_terminal_return_text_head_tail(
     if len(text) <= max_chars:
         return text
 
-    marker = "\n... (输出过长，已截断，以下为末尾输出)\n"
+    marker = "\n... (输出内容过长，为节省 token 已自动截断，以下为末尾输出)\n"
     if max_chars <= len(marker) + 1:
         return clip_terminal_return_text(text, max_chars=max_chars)
 
