@@ -361,6 +361,9 @@ def run_cli() -> None:
         print("cancel / 撤回         撤回当前已粘贴但未发送的图片")
         print("rollback              回退最近一次文件修改")
         print("undo                  一键回退到上一次对话（含文件修改）")
+        print("terminal <id>         查看指定终端的完整输出")
+        print("terminal list         列出最近的终端输出记录")
+        print("terminal stats        查看终端输出存储统计")
         print("save                  保存当前会话")
         print("clear                 清空当前会话历史")
         print("exit / quit           退出（自动保存 autosave）")
@@ -677,6 +680,99 @@ def run_cli() -> None:
                 except Exception:
                     pass
                 continue
+            
+            if cmd in ["terminal", "logs"]:
+                # Import output manager
+                try:
+                    from ..core.terminal_output_manager import TerminalOutputManager
+                    output_mgr = TerminalOutputManager()
+                    
+                    if not args:
+                        print(f"{Fore.YELLOW}用法:{Style.RESET_ALL}")
+                        print(f"  terminal <id>     - 查看指定终端的完整输出")
+                        print(f"  terminal list     - 列出最近的终端记录")
+                        print(f"  terminal stats    - 查看存储统计")
+                        continue
+                    
+                    if args[0].lower() == "list":
+                        # List recent terminal outputs
+                        limit = int(args[1]) if len(args) > 1 and args[1].isdigit() else 10
+                        records = output_mgr.list_recent(limit=limit)
+                        
+                        if not records:
+                            print(f"{Fore.YELLOW}没有找到终端输出记录{Style.RESET_ALL}")
+                            continue
+                        
+                        print(f"\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}最近的终端输出记录{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
+                        
+                        for i, rec in enumerate(records, 1):
+                            exit_color = Fore.GREEN if rec['exit_code'] == 0 else Fore.RED
+                            truncated = f" {Fore.YELLOW}(已截断){Style.RESET_ALL}" if rec['truncated'] else ""
+                            print(f"{i}. {Fore.YELLOW}[{rec['record_id']}]{Style.RESET_ALL} {rec['command']}")
+                            print(f"   时间: {rec['timestamp'][:19]} | 退出码: {exit_color}{rec['exit_code']}{Style.RESET_ALL}{truncated}")
+                            print(f"   目录: {rec['cwd']}")
+                            print()
+                        
+                        print(f"{Fore.CYAN}提示: 使用 'terminal <id>' 查看完整输出{Style.RESET_ALL}\n")
+                        continue
+                    
+                    elif args[0].lower() == "stats":
+                        # Show storage statistics
+                        stats = output_mgr.get_storage_stats()
+                        print(f"\n{Fore.CYAN}{'=' * 60}{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}终端输出存储统计{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}{'=' * 60}{Style.RESET_ALL}\n")
+                        print(f"{Fore.YELLOW}总记录数:{Style.RESET_ALL} {stats['total_records']}")
+                        print(f"{Fore.YELLOW}存储大小:{Style.RESET_ALL} {stats['total_size_mb']} MB")
+                        print(f"{Fore.YELLOW}日期目录数:{Style.RESET_ALL} {stats['date_directories']}")
+                        print(f"{Fore.YELLOW}缓存记录数:{Style.RESET_ALL} {stats['recent_records_cached']}")
+                        print(f"{Fore.YELLOW}存储目录:{Style.RESET_ALL} {stats['storage_dir']}")
+                        print(f"\n{Fore.CYAN}{'=' * 60}{Style.RESET_ALL}\n")
+                        continue
+                    
+                    else:
+                        # View specific terminal output
+                        record_id = args[0]
+                        success, record, msg = output_mgr.get_output(record_id)
+                        
+                        if not success or not record:
+                            print(f"{Fore.RED}未找到终端输出记录: {record_id}{Style.RESET_ALL}")
+                            print(f"{Fore.YELLOW}提示: 使用 'terminal list' 查看可用的记录{Style.RESET_ALL}")
+                            continue
+                        
+                        # Display full output
+                        display = output_mgr.format_output_display(record, max_lines=None)
+                        print(display)
+                        
+                        # Ask if user wants to save to file
+                        save_choice = input(f"{Fore.CYAN}是否保存到文件? (y/N): {Style.RESET_ALL}").strip().lower()
+                        if save_choice == 'y':
+                            filename = f"terminal_{record_id}.txt"
+                            try:
+                                with open(filename, 'w', encoding='utf-8') as f:
+                                    f.write(f"Command: {record.command}\n")
+                                    f.write(f"Working Directory: {record.cwd}\n")
+                                    f.write(f"Timestamp: {record.timestamp}\n")
+                                    f.write(f"Exit Code: {record.exit_code}\n")
+                                    f.write(f"{'=' * 60}\n\n")
+                                    f.write("=== STDOUT ===\n")
+                                    f.write(record.stdout)
+                                    f.write("\n\n=== STDERR ===\n")
+                                    f.write(record.stderr)
+                                print(f"{Fore.GREEN}已保存到: {filename}{Style.RESET_ALL}")
+                            except Exception as e:
+                                print(f"{Fore.RED}保存失败: {e}{Style.RESET_ALL}")
+                        
+                        continue
+                
+                except ImportError:
+                    print(f"{Fore.RED}终端输出管理器未安装{Style.RESET_ALL}")
+                    continue
+                except Exception as e:
+                    print(f"{Fore.RED}错误: {e}{Style.RESET_ALL}")
+                    continue
             
             if cmd in ["sessions"]:
                 if args and args[0].lower() in {"-help", "help", "?"}:

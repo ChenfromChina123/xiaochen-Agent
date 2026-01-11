@@ -10,13 +10,14 @@ from .process_tracker import ProcessTracker
 
 DEFAULT_MAX_TERMINAL_RETURN_CHARS = 2000
 
-def clip_terminal_return_text(text: str, max_chars: int = DEFAULT_MAX_TERMINAL_RETURN_CHARS) -> str:
+def clip_terminal_return_text(text: str, max_chars: int = DEFAULT_MAX_TERMINAL_RETURN_CHARS, terminal_id: Optional[str] = None) -> str:
     """
-    将终端输出按字符数截断为“仅保留尾部”。
+    将终端输出按字符数截断为"仅保留尾部"。
 
     Args:
         text: 原始输出文本
         max_chars: 最大保留字符数
+        terminal_id: 终端ID，用于提示用户查看完整输出
 
     Returns:
         截断后的文本（若未超长则原样返回）
@@ -30,15 +31,21 @@ def clip_terminal_return_text(text: str, max_chars: int = DEFAULT_MAX_TERMINAL_R
         return text
     removed = len(text) - max_chars
     tail = text[-max_chars:]
-    return f"... (输出内容过长，为节省 token 已自动截断 {removed} 字符，仅保留末尾 {max_chars} 字符)\n{tail}"
+    
+    hint = f"... (输出内容过长，为节省 token 已自动截断 {removed} 字符，仅保留末尾 {max_chars} 字符)"
+    if terminal_id:
+        hint += f"\n💡 提示：输入 'terminal {terminal_id}' 或 'logs {terminal_id}' 查看完整输出"
+    
+    return f"{hint}\n{tail}"
 
 def clip_terminal_return_text_head_tail(
     text: str,
     max_chars: int = DEFAULT_MAX_TERMINAL_RETURN_CHARS,
     head_chars: int = 1200,
+    terminal_id: Optional[str] = None
 ) -> str:
     """
-    将终端输出截断为“保留少量头部 + 保留尾部”。
+    将终端输出截断为"保留少量头部 + 保留尾部"。
 
     适用于既要保留关键信息（头部如状态/标题），又要保留最新日志（尾部）的场景。
 
@@ -46,6 +53,7 @@ def clip_terminal_return_text_head_tail(
         text: 原始输出文本
         max_chars: 最大保留字符数（总长度上限）
         head_chars: 头部保留字符数（不足时会自动调整以保障尾部最小长度）
+        terminal_id: 终端ID，用于提示用户查看完整输出
 
     Returns:
         截断后的文本（若未超长则原样返回）
@@ -58,9 +66,13 @@ def clip_terminal_return_text_head_tail(
     if len(text) <= max_chars:
         return text
 
-    marker = "\n... (输出内容过长，为节省 token 已自动截断，以下为末尾输出)\n"
+    marker = "\n... (输出内容过长，为节省 token 已自动截断，以下为末尾输出"
+    if terminal_id:
+        marker += f"，输入 'terminal {terminal_id}' 查看完整内容"
+    marker += ")\n"
+    
     if max_chars <= len(marker) + 1:
-        return clip_terminal_return_text(text, max_chars=max_chars)
+        return clip_terminal_return_text(text, max_chars=max_chars, terminal_id=terminal_id)
 
     head_chars = max(0, int(head_chars or 0))
     head_chars = min(head_chars, max_chars - len(marker) - 1)
@@ -91,6 +103,40 @@ class TerminalManager:
     """
     def __init__(self):
         self.terminals: Dict[str, TerminalProcess] = {}
+        # Initialize output manager for storing full terminal outputs
+        try:
+            from ..core.terminal_output_manager import TerminalOutputManager
+            self.output_manager = TerminalOutputManager()
+        except Exception:
+            self.output_manager = None
+    
+    def _save_output_to_storage(self, tid: str, command: str, cwd: str, stdout: str, stderr: str, exit_code: Optional[int], duration_ms: Optional[int] = None) -> None:
+        """
+        Save terminal output to storage manager
+        
+        Args:
+            tid: Terminal ID
+            command: Executed command
+            cwd: Working directory
+            stdout: Standard output
+            stderr: Standard error
+            exit_code: Exit code
+            duration_ms: Duration in milliseconds
+        """
+        if self.output_manager:
+            try:
+                self.output_manager.save_output(
+                    record_id=tid,
+                    command=command,
+                    cwd=cwd,
+                    exit_code=exit_code,
+                    stdout=stdout,
+                    stderr=stderr,
+                    duration_ms=duration_ms
+                )
+            except Exception:
+                # Silently fail if storage fails
+                pass
 
     def run_command(self, command: str, is_long_running: bool = False, cwd: Optional[str] = None) -> Tuple[bool, str, str, str]:
         """
@@ -152,9 +198,13 @@ class TerminalManager:
                         # 进程在 10 秒内提前结束，说明启动失败或瞬时任务
                         stdout, stderr = proc.communicate()
                         term.exit_code = proc.returncode
+                        duration_ms = int((time.time() - term.start_time) * 1000)
                         ProcessTracker().update_status(proc_uuid, "failed" if proc.returncode != 0 else "completed", proc.returncode)
                         
-                        output = clip_terminal_return_text(f"Stdout:\n{stdout}\nStderr:\n{stderr}")
+                        # Save full output to storage
+                        self._save_output_to_storage(tid, command, cwd or os.getcwd(), stdout, stderr, proc.returncode, duration_ms)
+                        
+                        output = clip_terminal_return_text(f"Stdout:\n{stdout}\nStderr:\n{stderr}", terminal_id=tid)
                         del self.terminals[tid]
                         return False, tid, output, f"Process exited early with code {proc.returncode}"
                     time.sleep(0.5)
@@ -167,9 +217,13 @@ class TerminalManager:
                 try:
                     stdout, stderr = proc.communicate(timeout=120)
                     term.exit_code = proc.returncode
+                    duration_ms = int((time.time() - term.start_time) * 1000)
                     ProcessTracker().update_status(proc_uuid, "completed" if proc.returncode == 0 else "failed", proc.returncode)
                     
-                    output = clip_terminal_return_text(f"Stdout:\n{stdout}\nStderr:\n{stderr}")
+                    # Save full output to storage
+                    self._save_output_to_storage(tid, command, cwd or os.getcwd(), stdout, stderr, proc.returncode, duration_ms)
+                    
+                    output = clip_terminal_return_text(f"Stdout:\n{stdout}\nStderr:\n{stderr}", terminal_id=tid)
                     del self.terminals[tid]
                     if proc.returncode == 0:
                         return True, tid, output, ""
