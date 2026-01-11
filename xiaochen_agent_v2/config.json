@@ -1,8 +1,32 @@
 {
-  "api_key": "sk-8b66935cbeb246279b617e6d4dbbe8a7",
+  "api_key": "sk-568e4fdcca6244368004ebd8c88d99a0",
   "base_url": "https://api.deepseek.com",
   "model_name": "deepseek-chat",
   "verify_ssl": true,
   "auto_save_session": false,
-  "max_cycles": 30
+  "max_cycles": 30,
+  "logs_dir": "logs",
+  "storage_dir": "storage",
+  "token_threshold": 30000,
+  "whitelisted_tools": [
+    "search_files",
+    "search_in_files",
+    "read_file",
+    "task_add",
+    "task_update",
+    "task_delete",
+    "task_list",
+    "task_clear"
+  ],
+  "whitelisted_commands": [
+    "ls",
+    "dir",
+    "pwd",
+    "whoami",
+    "echo",
+    "cat",
+    "type"
+  ],
+  "read_indent_mode": "header",
+  "python_validate_ruff": "auto"
 }
