@@ -16,6 +16,57 @@
 - **会话命名**：支持为会话添加自定义名称，便于识别
 - **自动时间戳**：每个会话自动记录创建时间
 
+### 🔄 增强回滚系统
+
+独立的版本控制模块，提供专业级的文件回滚功能：
+
+#### 核心功能
+- **多级版本历史**：保存所有文件的历史版本，可回滚到任意版本
+- **版本对比**：查看任意两个版本之间的差异（diff）
+- **快照管理**：创建多文件快照，一键恢复整个项目状态
+- **版本标签**：为重要版本打标签（如 `stable`, `tested`, `release`）
+- **智能清理**：自动清理旧版本，保留最近和标记的重要版本
+- **统计信息**：查看存储使用情况和版本数量
+
+#### 使用示例
+
+```python
+from xiaochen_agent_v2.core.rollback_manager import RollbackManager
+
+# 初始化回滚管理器
+rm = RollbackManager()
+
+# 备份文件（修改前）
+rm.backup_file("config.py", operation="edit", description="Updated settings")
+
+# 回滚到上一个版本
+rm.rollback_file("config.py", steps_back=1)
+
+# 查看版本历史
+history = rm.get_version_history("config.py", limit=10)
+
+# 比较版本差异
+success, diff = rm.get_diff("config.py")
+
+# 创建快照
+rm.create_snapshot("项目里程碑 v1.0", tags=["milestone"])
+
+# 恢复快照
+rm.restore_snapshot(snapshot_id)
+
+# 为版本打标签
+rm.add_tag("config.py", version_id, "stable")
+
+# 清理旧版本（保留最近5个和所有标记版本）
+rm.cleanup_old_versions(keep_recent=5, keep_tagged=True)
+```
+
+#### 运行示例
+```bash
+cd xiaochen_agent_v2
+python examples/rollback_example.py
+```
+
 ### 🔍 OCR 识别工具
 - **图片识别**：支持对本地图片（PNG, JPG, BMP等）进行文字识别
 - **文档识别**：支持对 PDF 等多页文档进行 OCR 识别，支持指定页码范围
@@ -173,6 +224,7 @@ agent.bat
 - **清空历史**：输入 `clear` 清空会话历史
 - **回滚操作**：输入 `rollback` 撤销上一次文件操作
 - **一键回退对话**：输入 `undo` 回退到上一次对话（含文件修改）
+- **增强回滚系统**：使用独立的 `RollbackManager` 提供更强大的版本控制功能（详见下方）
 - **撤回粘贴**：输入 `cancel` 或 `撤回` 撤回当前已通过 Ctrl+V 粘贴但未发送的图片
 - **查看会话列表**：输入 `sessions` 查看最近 10 个历史会话
 - **删除会话**：输入 `sessions delete <n...|--all> [-y]` 删除指定或所有会话
