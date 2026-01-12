@@ -657,12 +657,6 @@ class Tools:
             if any(d in cmd.lower() for d in dangerousCmds):
                 results.append(f"FAILURE: Dangerous command blocked: {cmd}")
                 continue
-            
-            # Block interactive programs that would cause deadlock
-            interactiveCmds = ["python run.py", "python xiaochen_agent", "agent", "npm start", "npm run dev"]
-            if any(ic in cmd.lower() for ic in interactiveCmds):
-                results.append(f"FAILURE: Interactive command blocked (would cause deadlock): {cmd}\nHint: Use direct script execution instead of starting interactive programs.")
-                continue
 
             env_result = _try_handle_set_env(cmd)
             if env_result is not None:
