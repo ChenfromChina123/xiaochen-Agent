@@ -793,28 +793,28 @@ def run_cli() -> None:
                     print(f"{Fore.RED}错误: {e}{Style.RESET_ALL}")
                     continue
             
-            if cmd == "ps" and not args:
+            if cmd == "ps":
                 # List running processes using rich UI
                 ui = get_terminal_ui()
                 
                 try:
                     terminals = agent.terminalManager.list_terminals()
                     total_tracked = len(agent.terminalManager.terminals)
+                    
+                    if not terminals:
+                        if total_tracked > 0:
+                            ui.print_warning(f"没有正在运行的进程（已跟踪 {total_tracked} 个已结束的进程）")
+                        else:
+                            ui.print_warning("没有正在运行的进程")
+                    else:
+                        # 使用 rich 表格显示
+                        ui.show_process_table(terminals)
+                    
                 except Exception as e:
                     ui.print_error(f"获取进程列表失败: {e}")
                     import traceback
                     traceback.print_exc()
-                    continue
                 
-                if not terminals:
-                    if total_tracked > 0:
-                        ui.print_warning(f"没有正在运行的进程（已跟踪 {total_tracked} 个已结束的进程）")
-                    else:
-                        ui.print_warning("没有正在运行的进程")
-                    continue
-                
-                # 使用 rich 表格显示
-                ui.show_process_table(terminals)
                 continue
             
             if cmd == "kill":
@@ -861,6 +861,7 @@ def run_cli() -> None:
                 
                 if not args:
                     ui.print_warning("用法: watch <terminal_id>")
+                    ui.print_info("示例: watch e67a8287")
                     continue
                 
                 tid = args[0]
@@ -868,10 +869,17 @@ def run_cli() -> None:
                 
                 if not term:
                     ui.print_error(f"终端 {tid} 不存在")
+                    ui.print_info("使用 'ps' 命令查看可用的终端ID")
                     continue
                 
-                # 使用高级 UI 监控进程
-                ui.watch_process(term, tid, max_duration=300)
+                try:
+                    # 使用高级 UI 监控进程
+                    ui.watch_process(term, tid, max_duration=300)
+                except KeyboardInterrupt:
+                    ui.print_info("已退出监控")
+                except Exception as e:
+                    ui.print_error(f"监控失败: {e}")
+                
                 continue
             
             if cmd == "monitor":
