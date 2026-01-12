@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 import threading
 import time
 from typing import List, Dict, Optional
@@ -365,6 +366,8 @@ def run_cli() -> None:
         print("terminal list         列出最近的终端输出记录")
         print("terminal stats        查看终端输出存储统计")
         print("ps                    查看正在运行的进程")
+        print("watch <id>            实时查看进程输出（Ctrl+C 退出）")
+        print("monitor <id>          在新窗口中监控进程输出")
         print("kill <id>             终止指定进程（优雅终止）")
         print("kill <id> -f          强制终止指定进程")
         print("kill all              终止所有进程")
@@ -861,6 +864,119 @@ def run_cli() -> None:
                     print(f"{Fore.GREEN}✓ {msg}{Style.RESET_ALL}")
                 else:
                     print(f"{Fore.RED}✗ {msg}{Style.RESET_ALL}")
+                continue
+            
+            if cmd == "watch":
+                if not args:
+                    print(f"{Fore.YELLOW}用法: watch <terminal_id>{Style.RESET_ALL}")
+                    continue
+                
+                tid = args[0]
+                term = agent.terminalManager.terminals.get(tid)
+                
+                if not term:
+                    print(f"{Fore.RED}终端 {tid} 不存在{Style.RESET_ALL}")
+                    continue
+                
+                # 进入实时监控模式
+                print(f"\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}实时监控: {term.command}{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}终端 ID: {tid} | PID: {term.process.pid}{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}按 Ctrl+C 退出监控{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
+                
+                # 显示已有输出
+                if term.output:
+                    for line in term.output[-50:]:  # 只显示最近50行
+                        print(line.rstrip())
+                
+                # 实时追踪新输出
+                last_line_count = len(term.output)
+                try:
+                    import msvcrt
+                    while term.process.poll() is None:
+                        # 检查是否有新输出
+                        if len(term.output) > last_line_count:
+                            for line in term.output[last_line_count:]:
+                                print(line.rstrip())
+                            last_line_count = len(term.output)
+                        
+                        # 检查键盘输入（非阻塞）
+                        if msvcrt.kbhit():
+                            key = msvcrt.getch()
+                            if key == b'\x03':  # Ctrl+C
+                                break
+                        
+                        time.sleep(0.1)
+                    
+                    # 进程结束，显示退出信息
+                    if term.process.poll() is not None:
+                        # 显示剩余输出
+                        if len(term.output) > last_line_count:
+                            for line in term.output[last_line_count:]:
+                                print(line.rstrip())
+                        
+                        print(f"\n{Fore.YELLOW}{'=' * 80}{Style.RESET_ALL}")
+                        print(f"{Fore.YELLOW}进程已结束 | 退出码: {term.exit_code}{Style.RESET_ALL}")
+                        print(f"{Fore.YELLOW}{'=' * 80}{Style.RESET_ALL}\n")
+                    else:
+                        print(f"\n{Fore.CYAN}已退出监控模式（进程仍在运行）{Style.RESET_ALL}\n")
+                        
+                except KeyboardInterrupt:
+                    print(f"\n{Fore.CYAN}已退出监控模式（进程仍在运行）{Style.RESET_ALL}\n")
+                except Exception as e:
+                    print(f"\n{Fore.RED}监控出错: {e}{Style.RESET_ALL}\n")
+                
+                continue
+            
+            if cmd == "monitor":
+                if not args:
+                    print(f"{Fore.YELLOW}用法: monitor <terminal_id>{Style.RESET_ALL}")
+                    continue
+                
+                tid = args[0]
+                term = agent.terminalManager.terminals.get(tid)
+                
+                if not term:
+                    print(f"{Fore.RED}终端 {tid} 不存在{Style.RESET_ALL}")
+                    continue
+                
+                # 创建临时脚本来监控输出
+                import tempfile
+                script_content = f'''@echo off
+chcp 65001 > nul
+title Monitor: {term.command[:50]}
+echo ================================================================================
+echo 监控终端: {tid}
+echo 命令: {term.command}
+echo PID: {term.process.pid}
+echo ================================================================================
+echo.
+echo 正在实时显示输出...
+echo 关闭此窗口不会终止进程
+echo ================================================================================
+echo.
+
+:loop
+timeout /t 1 /nobreak > nul
+echo [刷新中...]
+goto loop
+'''
+                
+                try:
+                    # 创建临时批处理文件
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='gbk') as f:
+                        f.write(script_content)
+                        script_path = f.name
+                    
+                    # 在新窗口中启动监控
+                    subprocess.Popen(['start', 'cmd', '/k', script_path], shell=True)
+                    print(f"{Fore.GREEN}✓ 已在新窗口中打开监控界面{Style.RESET_ALL}")
+                    print(f"{Fore.CYAN}提示: 关闭监控窗口不会影响进程运行{Style.RESET_ALL}")
+                    
+                except Exception as e:
+                    print(f"{Fore.RED}打开监控窗口失败: {e}{Style.RESET_ALL}")
+                
                 continue
             
             if cmd in ["sessions"]:
