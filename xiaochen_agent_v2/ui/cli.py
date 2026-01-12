@@ -536,9 +536,7 @@ def run_cli() -> None:
             
             # 检查是否有正在运行的进程
             try:
-                from ..utils.terminal import TerminalManager
-                tm = TerminalManager()
-                running_processes = tm.list_terminals()
+                running_processes = agent.terminalManager.list_terminals()
                 if running_processes:
                     proc_info = f" {Fore.YELLOW}[{len(running_processes)} 个进程运行中]{Style.RESET_ALL}"
                 else:
@@ -793,9 +791,7 @@ def run_cli() -> None:
             
             if cmd == "ps" and not args:
                 # List running processes
-                from ..utils.terminal import TerminalManager
-                tm = TerminalManager()
-                terminals = tm.list_terminals()
+                terminals = agent.terminalManager.list_terminals()
                 
                 if not terminals:
                     print(f"{Fore.YELLOW}没有正在运行的进程{Style.RESET_ALL}")
@@ -828,12 +824,9 @@ def run_cli() -> None:
                     print(f"  kill all         - 终止所有进程")
                     continue
                 
-                from ..utils.terminal import TerminalManager
-                tm = TerminalManager()
-                
                 if args[0].lower() == "all":
                     # Kill all processes
-                    terminals = tm.list_terminals()
+                    terminals = agent.terminalManager.list_terminals()
                     if not terminals:
                         print(f"{Fore.YELLOW}没有正在运行的进程{Style.RESET_ALL}")
                         continue
@@ -843,7 +836,7 @@ def run_cli() -> None:
                         print(f"{Fore.YELLOW}已取消{Style.RESET_ALL}")
                         continue
                     
-                    success, failed = tm.kill_all_terminals()
+                    success, failed = agent.terminalManager.kill_all_terminals()
                     print(f"{Fore.GREEN}成功终止: {success}{Style.RESET_ALL} | {Fore.RED}失败: {failed}{Style.RESET_ALL}")
                     continue
                 
@@ -851,7 +844,7 @@ def run_cli() -> None:
                 tid = args[0]
                 force = len(args) > 1 and args[1].lower() in {"-f", "--force", "force"}
                 
-                ok, msg = tm.kill_terminal(tid, force=force)
+                ok, msg = agent.terminalManager.kill_terminal(tid, force=force)
                 if ok:
                     print(f"{Fore.GREEN}✓ {msg}{Style.RESET_ALL}")
                 else:
