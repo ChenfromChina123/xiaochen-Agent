@@ -13,11 +13,104 @@ from ..utils.console import Fore, Style
 from ..core.session import SessionManager
 from ..core.config_manager import ConfigManager
 from ..utils.process_tracker import ProcessTracker
-from .terminal_ui import get_terminal_ui
 
 
 from ..utils.files import get_repo_root, prune_directory
 from ..tools import save_clipboard_image, save_clipboard_file, is_image_path, get_clipboard_text
+
+def _normalize_user_input(text: str) -> str:
+    """
+    清理方向键等控制序列，避免终端不支持行编辑时污染输入内容。
+    """
+    if not isinstance(text, str) or not text:
+        return ""
+    s = text
+    try:
+        import unicodedata
+
+        s = unicodedata.normalize("NFKC", s)
+        s = "".join(ch for ch in s if unicodedata.category(ch) != "Cf")
+    except Exception:
+        pass
+
+    s = (
+        s.replace("\ufeff", "")
+        .replace("\u200b", "")
+        .replace("\u2060", "")
+        .replace("\u00a0", " ")
+        .replace("\u3000", " ")
+    )
+    if "\x1b" in s:
+        import re
+
+        s = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", s)
+        s = re.sub(r"\x1b\][^\x07]*(\x07|\x1b\\)", "", s)
+    s = s.replace("\x08", "")
+    return s
+
+def _normalize_command_token(token: str) -> str:
+    """
+    规范化命令 token，避免因不可见字符导致命令无法匹配。
+    """
+    return _normalize_user_input(token).strip()
+
+def _get_sorted_terminals(manager) -> List[tuple]:
+    """
+    获取按启动时间排序的终端列表（用于生成简单 ID）。
+    返回: List[(tid, terminal_obj)]
+    """
+    if not manager or not manager.terminals:
+        return []
+    
+    # 将终端字典转换为列表并按启动时间排序
+    # 假设 start_time 存在，如果不存在则使用 key (uuid) 排序保证确定性
+    items = []
+    for tid, term in manager.terminals.items():
+        start_time = getattr(term, 'start_time', 0)
+        items.append((tid, term, start_time))
+    
+    # 按启动时间升序排序（旧的在前，新的在后）
+    items.sort(key=lambda x: x[2])
+    return [(x[0], x[1]) for x in items]
+
+def _resolve_terminal_id(manager, arg_id: str) -> Optional[str]:
+    """
+    解析终端 ID 参数，支持:
+    1. 简单 ID (1, 2, 3...) -> 对应排序后的索引
+    2. UUID 前缀或全名
+    3. PID
+    """
+    if not arg_id:
+        return None
+        
+    sorted_terms = _get_sorted_terminals(manager)
+    
+    # 1. 尝试作为简单 ID (索引)
+    if arg_id.isdigit():
+        idx = int(arg_id)
+        # 如果是简单 ID (1-based index)
+        if 1 <= idx <= len(sorted_terms):
+            return sorted_terms[idx-1][0]
+        # 同时也可能是 PID，继续往下查
+    
+    # 2. 尝试作为 UUID 匹配
+    if arg_id in manager.terminals:
+        return arg_id
+        
+    # 3. 尝试作为 PID 匹配
+    for tid, term in manager.terminals.items():
+        try:
+            if str(term.process.pid) == arg_id:
+                return tid
+        except:
+            pass
+            
+    # 4. 尝试 UUID 前缀匹配
+    for tid in manager.terminals:
+        if tid.startswith(arg_id):
+            return tid
+            
+    return None
 
 def run_cli() -> None:
     """
@@ -28,8 +121,17 @@ def run_cli() -> None:
     import sys
     if sys.platform == "win32":
         import io
-        sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        # 仅当编码不是 utf-8 时才重新包装，避免双重缓冲问题
+        if sys.stdin.encoding.lower() != 'utf-8':
+            try:
+                sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+            except Exception:
+                pass
+        if sys.stdout.encoding.lower() != 'utf-8':
+            try:
+                sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+            except Exception:
+                pass
         os.system('chcp 65001 > nul')
     else:
         try:
@@ -46,20 +148,7 @@ def run_cli() -> None:
             except Exception:
                 pass
 
-    def _normalize_user_input(text: str) -> str:
-        """
-        清理方向键等控制序列，避免终端不支持行编辑时污染输入内容。
-        """
-        if not isinstance(text, str) or not text:
-            return ""
-        s = text
-        if "\x1b" in s:
-            import re
 
-            s = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", s)
-            s = re.sub(r"\x1b\][^\x07]*(\x07|\x1b\\)", "", s)
-        s = s.replace("\x08", "")
-        return s
 
     # 初始化配置管理器
     config_file = os.path.join(get_repo_root(), "config.json")
@@ -367,7 +456,7 @@ def run_cli() -> None:
         print("terminal list         列出最近的终端输出记录")
         print("terminal stats        查看终端输出存储统计")
         print("ps                    查看正在运行的进程")
-        print("watch <id>            实时查看进程输出（Ctrl+C 退出）")
+        print("watch <id>            监控进程输出（支持暂停/清屏/终止等）")
         print("monitor <id>          在新窗口中监控进程输出")
         print("kill <id>             终止指定进程（优雅终止）")
         print("kill <id> -f          强制终止指定进程")
@@ -628,7 +717,7 @@ def run_cli() -> None:
             
             # 处理特殊命令
             parts = raw_cmd.split()
-            cmd = parts[0].lower()
+            cmd = _normalize_command_token(parts[0]).lower()
             args = parts[1:]
             
             if raw_cmd.lower() in ["help", "?"]:
@@ -793,93 +882,517 @@ def run_cli() -> None:
                     print(f"{Fore.RED}错误: {e}{Style.RESET_ALL}")
                     continue
             
-            if cmd == "ps":
-                # List running processes using rich UI
-                ui = get_terminal_ui()
-                
+
+
+    # ... (inside run_cli loop) ...
+
+            if cmd == "ps" and not args:
+                # List running processes
                 try:
-                    terminals = agent.terminalManager.list_terminals()
+                    # 使用排序后的列表
+                    sorted_terms = _get_sorted_terminals(agent.terminalManager)
+                    terminals = []
+                    # 重新封装为 list_terminals 的格式，但附带 index
+                    for idx, (tid, term) in enumerate(sorted_terms, 1):
+                         status = agent.terminalManager.get_terminal_status(tid)
+                         status['index'] = idx
+                         terminals.append(status)
+                         
                     total_tracked = len(agent.terminalManager.terminals)
-                    
-                    if not terminals:
-                        if total_tracked > 0:
-                            ui.print_warning(f"没有正在运行的进程（已跟踪 {total_tracked} 个已结束的进程）")
-                        else:
-                            ui.print_warning("没有正在运行的进程")
-                    else:
-                        # 使用 rich 表格显示
-                        ui.show_process_table(terminals)
-                    
                 except Exception as e:
-                    ui.print_error(f"获取进程列表失败: {e}")
+                    print(f"{Fore.RED}错误: 获取进程列表失败: {e}{Style.RESET_ALL}")
                     import traceback
                     traceback.print_exc()
+                    continue
                 
+                if not terminals:
+                    if total_tracked > 0:
+                        print(f"{Fore.YELLOW}没有正在运行的进程（已跟踪 {total_tracked} 个已结束的进程）{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.YELLOW}没有正在运行的进程{Style.RESET_ALL}")
+                    continue
+                
+                print(f"\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}正在运行的进程 ({len(terminals)}/{total_tracked}){Style.RESET_ALL}")
+                print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
+                
+                for t in terminals:
+                    uptime_str = f"{int(t['uptime'])}s"
+                    if t['uptime'] >= 60:
+                        uptime_str = f"{int(t['uptime'] / 60)}m {int(t['uptime']) % 60}s"
+                    
+                    status_color = Fore.GREEN if t['is_running'] else Fore.RED
+                    status = "RUNNING" if t['is_running'] else "STOPPED"
+                    
+                    proc_type = "长期" if t.get('is_long_running') else "短期"
+                    
+                    # 显示简单 ID
+                    idx_str = f"[{t['index']}]"
+                    print(f"{Fore.YELLOW}{idx_str:<5}{Style.RESET_ALL} {t['command'][:60]}")
+                    print(f"      ID: {t['id']} | PID: {t['pid']} | 状态: {status_color}{status}{Style.RESET_ALL} | 运行: {uptime_str}")
+                    print()
+                
+                print(f"{Fore.CYAN}提示: 使用 'kill <id>' 或 'watch <id>' (支持简单ID 1,2...){Style.RESET_ALL}\n")
                 continue
             
             if cmd == "kill":
-                ui = get_terminal_ui()
+                target_tid = None
+                force = False
                 
                 if not args:
-                    ui.print_warning("用法:")
-                    print("  kill <id>        - 终止指定进程（优雅）")
-                    print("  kill <id> -f     - 强制终止指定进程")
-                    print("  kill all         - 终止所有进程")
-                    continue
-                
-                if args[0].lower() == "all":
-                    # Kill all processes
-                    terminals = agent.terminalManager.list_terminals()
-                    if not terminals:
-                        ui.print_warning("没有正在运行的进程")
+                    # 无参数：尝试 kill 最近的一个？
+                    # 用户通常不会希望无意中 kill 进程，所以 kill 最好还是要求确认或者显式参数。
+                    # 但用户需求里提到了：如果直接无参数回车则默认使用最近启动的子进程。
+                    # 对于 kill 来说这有点危险，但既然用户要求... 我们加个确认吧。
+                    sorted_terms = _get_sorted_terminals(agent.terminalManager)
+                    if sorted_terms:
+                        target_tid = sorted_terms[-1][0] # 最近的一个
+                        print(f"{Fore.YELLOW}未指定 ID，默认选择最近的进程: {target_tid}{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.YELLOW}用法:{Style.RESET_ALL}")
+                        print(f"  kill <id>        - 终止指定进程（支持简单ID 1,2...）")
+                        print(f"  kill <id> -f     - 强制终止指定进程")
+                        print(f"  kill all         - 终止所有进程")
                         continue
-                    
-                    confirm = input(f"{Fore.RED}确认终止所有 {len(terminals)} 个进程? (y/N): {Style.RESET_ALL}").strip().lower()
-                    if confirm != "y":
-                        ui.print_info("已取消")
-                        continue
-                    
-                    success, failed = agent.terminalManager.kill_all_terminals()
-                    ui.print_success(f"成功终止: {success}")
-                    if failed > 0:
-                        ui.print_error(f"失败: {failed}")
-                    continue
-                
-                # Kill specific process
-                tid = args[0]
-                force = len(args) > 1 and args[1].lower() in {"-f", "--force", "force"}
-                
-                ok, msg = agent.terminalManager.kill_terminal(tid, force=force)
-                if ok:
-                    ui.print_success(msg)
                 else:
-                    ui.print_error(msg)
+                    if args[0].lower() == "all":
+                         # ... (existing all logic) ...
+                         pass
+                    else:
+                        raw_id = args[0]
+                        target_tid = _resolve_terminal_id(agent.terminalManager, raw_id)
+                        if not target_tid:
+                            print(f"{Fore.RED}找不到 ID 为 '{raw_id}' 的进程{Style.RESET_ALL}")
+                            continue
+                        
+                        force = len(args) > 1 and args[1].lower() in {"-f", "--force", "force"}
+
+                if args and args[0].lower() == "all":
+                     # existing logic
+                     terminals = agent.terminalManager.list_terminals()
+                     if not terminals:
+                        print(f"{Fore.YELLOW}没有正在运行的进程{Style.RESET_ALL}")
+                        continue
+                    
+                     confirm = input(f"{Fore.RED}确认终止所有 {len(terminals)} 个进程? (y/N): {Style.RESET_ALL}").strip().lower()
+                     if confirm != "y":
+                        print(f"{Fore.YELLOW}已取消{Style.RESET_ALL}")
+                        continue
+                    
+                     success, failed = agent.terminalManager.kill_all_terminals()
+                     print(f"{Fore.GREEN}成功终止: {success}{Style.RESET_ALL} | {Fore.RED}失败: {failed}{Style.RESET_ALL}")
+                     continue
+
+                # Execute single kill
+                if target_tid:
+                    # 如果是默认选择的（无参），或者用户输入的，都执行
+                    # 再次确认一下如果是默认的
+                    if not args:
+                         confirm = input(f"{Fore.YELLOW}确认终止最近的进程 {target_tid}? (y/N): {Style.RESET_ALL}").strip().lower()
+                         if confirm != "y":
+                             continue
+
+                    ok, msg = agent.terminalManager.kill_terminal(target_tid, force=force)
+                    if ok:
+                        print(f"{Fore.GREEN}✓ {msg}{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.RED}✗ {msg}{Style.RESET_ALL}")
                 continue
             
             if cmd == "watch":
-                ui = get_terminal_ui()
+                target_tid = None
                 
                 if not args:
-                    ui.print_warning("用法: watch <terminal_id>")
-                    ui.print_info("示例: watch e67a8287")
-                    continue
-                
-                tid = args[0]
+                    # 默认最近
+                    sorted_terms = _get_sorted_terminals(agent.terminalManager)
+                    if sorted_terms:
+                        target_tid = sorted_terms[-1][0]
+                        # print(f"{Fore.CYAN}自动选择最近的进程: {target_tid}{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.YELLOW}当前没有运行中的进程。{Style.RESET_ALL}")
+                        continue
+                else:
+                    raw_id = args[0]
+                    # 检查是否是 flag
+                    if raw_id.startswith("-"):
+                        # 如果第一个参数是 flag，说明没给 ID，默认最近
+                         sorted_terms = _get_sorted_terminals(agent.terminalManager)
+                         if sorted_terms:
+                            target_tid = sorted_terms[-1][0]
+                         else:
+                            print(f"{Fore.YELLOW}当前没有运行中的进程。{Style.RESET_ALL}")
+                            continue
+                    else:
+                        target_tid = _resolve_terminal_id(agent.terminalManager, raw_id)
+                        if not target_tid:
+                             print(f"{Fore.RED}找不到 ID 为 '{raw_id}' 的进程{Style.RESET_ALL}")
+                             continue
+
+                tid = target_tid
                 term = agent.terminalManager.terminals.get(tid)
-                
-                if not term:
-                    ui.print_error(f"终端 {tid} 不存在")
-                    ui.print_info("使用 'ps' 命令查看可用的终端ID")
+                # ... rest of watch logic ...
+
+
+                timeout_s: Optional[float] = None
+                interval_s = 0.1
+                plain = False
+
+                idx = 1
+                bad_arg = None
+                while idx < len(args):
+                    a = str(args[idx]).strip()
+                    al = a.lower()
+                    if al in {"-h", "--help", "help", "?"}:
+                        print(f"{Fore.YELLOW}用法: watch <terminal_id> [--timeout 秒] [--interval 秒] [--plain]{Style.RESET_ALL}")
+                        print(f"{Fore.YELLOW}交互控制: q退出 p暂停/继续 c清屏 k终止 f强制终止 +/-调速 t状态 h帮助{Style.RESET_ALL}")
+                        bad_arg = "help"
+                        break
+                    if al in {"--plain", "--no-prefix"}:
+                        plain = True
+                        idx += 1
+                        continue
+                    if al in {"--timeout", "-t"}:
+                        if idx + 1 >= len(args):
+                            bad_arg = a
+                            break
+                        try:
+                            v = float(str(args[idx + 1]).strip())
+                            timeout_s = None if v <= 0 else v
+                        except Exception:
+                            bad_arg = a
+                            break
+                        idx += 2
+                        continue
+                    if al in {"--interval", "-i"}:
+                        if idx + 1 >= len(args):
+                            bad_arg = a
+                            break
+                        try:
+                            v = float(str(args[idx + 1]).strip())
+                            interval_s = 0.1 if v <= 0 else v
+                        except Exception:
+                            bad_arg = a
+                            break
+                        idx += 2
+                        continue
+                    bad_arg = a
+                    break
+
+                if bad_arg:
+                    if bad_arg != "help":
+                        print(f"{Fore.YELLOW}参数错误: {bad_arg}{Style.RESET_ALL}")
+                        print(f"{Fore.YELLOW}用法: watch <terminal_id> [--timeout 秒] [--interval 秒] [--plain]{Style.RESET_ALL}")
                     continue
-                
+
+                def _format_watch_line(s: str) -> str:
+                    if not plain:
+                        return s
+                    if s.startswith("stdout: "):
+                        return s[8:]
+                    if s.startswith("stderr: "):
+                        return s[8:]
+                    return s
+
+                def _read_key() -> Optional[str]:
+                    try:
+                        if sys.platform == "win32":
+                            import msvcrt
+
+                            if not msvcrt.kbhit():
+                                return None
+                            ch = msvcrt.getwch()
+                            if ch in {"\x00", "\xe0"}:
+                                try:
+                                    _ = msvcrt.getwch()
+                                except Exception:
+                                    pass
+                                return None
+                            return ch
+                        else:
+                            import select
+
+                            r, _, _ = select.select([sys.stdin], [], [], 0)
+                            if not r:
+                                return None
+                            return sys.stdin.read(1)
+                    except Exception:
+                        return None
+
+                def _print_watch_header(current_term) -> None:
+                    pid = None
+                    try:
+                        pid = current_term.process.pid
+                    except Exception:
+                        pid = None
+                    print(f"\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
+                    print(f"{Fore.CYAN}监控: {current_term.command}{Style.RESET_ALL}")
+                    if pid is not None:
+                        print(f"{Fore.CYAN}终端 ID: {tid} | PID: {pid}{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.CYAN}终端 ID: {tid}{Style.RESET_ALL}")
+                    print(f"{Fore.CYAN}按键: q退出 i交互 p暂停/继续 c清屏 k终止 f强制终止 +/-调速 t状态 h帮助{Style.RESET_ALL}")
+                    
+                    # 检查是否为交互式控制台进程（输出未捕获）
+                    if sys.platform == "win32" and current_term.is_long_running:
+                        try:
+                            # 粗略判断：如果是交互式创建的，stdout 应该是 None
+                            if current_term.process.stdout is None:
+                                print(f"\n{Fore.YELLOW}⚠️  注意：此进程运行在独立的交互式窗口中。{Style.RESET_ALL}")
+                                print(f"{Fore.YELLOW}    输出内容无法在此处显示，请切换到弹出的新窗口进行查看和交互。{Style.RESET_ALL}")
+                        except Exception:
+                            pass
+
+                    if timeout_s:
+                        print(f"{Fore.CYAN}超时: {timeout_s:.0f}s | 刷新: {interval_s:.2f}s{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.CYAN}刷新: {interval_s:.2f}s{Style.RESET_ALL}")
+                    print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
+                    sys.stdout.flush()
+
+                paused = False
+                history_lines = 80
                 try:
-                    # 使用高级 UI 监控进程
-                    ui.watch_process(term, tid, max_duration=300)
+                    _print_watch_header(term)
+                    print(f"{Fore.GREEN}=== 历史输出 (最近{history_lines}行) ==={Style.RESET_ALL}")
+                    sys.stdout.flush()
+                    if term.output:
+                        for line in list(term.output)[-history_lines:]:
+                            print(_format_watch_line(str(line)).rstrip())
+                        sys.stdout.flush()
+                    else:
+                        print(f"{Fore.YELLOW}(暂无输出){Style.RESET_ALL}")
+                        sys.stdout.flush()
+
+                    print(f"\n{Fore.GREEN}=== 实时输出（监控中...）==={Style.RESET_ALL}")
+                    sys.stdout.flush()
+
+                    last_line_count = len(term.output)
+                    start_watch_time = time.time()
+
+                    input_mode = False
+                    should_exit_watch = False
+
+                    while True:
+                        if should_exit_watch:
+                            break
+
+                        # 处理所有缓冲按键
+                        while True:
+                            key = _read_key()
+                            if not key:
+                                break
+                            
+                            if input_mode:
+                                if key == '\x1b': # ESC
+                                    input_mode = False
+                                    print(f"\n{Fore.CYAN}已退出交互模式{Style.RESET_ALL}")
+                                    sys.stdout.flush()
+                                else:
+                                    # 发送输入
+                                    # 将回车符转换为换行符，因为管道模式下的 input() 通常需要 \n
+                                    data_to_send = key
+                                    if key == '\r':
+                                        data_to_send = '\n'
+                                    
+                                    if agent.terminalManager.send_input(tid, data_to_send):
+                                        # 本地回显
+                                        if key == '\r':
+                                            sys.stdout.write('\n')
+                                        elif key == '\x08': # Backspace
+                                            sys.stdout.write('\b \b')
+                                        else:
+                                            sys.stdout.write(key)
+                                        sys.stdout.flush()
+                                continue
+
+                            kl = key.lower()
+                            
+                            if kl == 'i':
+                                input_mode = True
+                                print(f"\n{Fore.GREEN}=== 进入交互模式 (按 ESC 退出) ==={Style.RESET_ALL}")
+                                print(f"{Fore.GREEN}提示: 你的输入将直接发送给进程。{Style.RESET_ALL}")
+                                sys.stdout.flush()
+                                continue
+
+                            if kl in {"q"}:
+                                should_exit_watch = True
+                                break
+                            if kl in {"h", "?"}:
+                                print(f"\n{Fore.CYAN}按键: q退出 i交互 p暂停/继续 c清屏 k终止 f强制终止 +/-调速 t状态 h帮助{Style.RESET_ALL}")
+                                sys.stdout.flush()
+                            elif kl in {"p", " "}:
+                                paused = not paused
+                                st = "暂停" if paused else "继续"
+                                print(f"\n{Fore.CYAN}已{st}监控{Style.RESET_ALL}")
+                                sys.stdout.flush()
+                            elif kl in {"c"}:
+                                try:
+                                    os.system("cls" if sys.platform == "win32" else "clear")
+                                except Exception:
+                                    pass
+                                current_term = agent.terminalManager.terminals.get(tid) or term
+                                _print_watch_header(current_term)
+                                print(f"{Fore.GREEN}=== 历史输出 (最近{history_lines}行) ==={Style.RESET_ALL}")
+                                if current_term.output:
+                                    for line in list(current_term.output)[-history_lines:]:
+                                        print(_format_watch_line(str(line)).rstrip())
+                                else:
+                                    print(f"{Fore.YELLOW}(暂无输出){Style.RESET_ALL}")
+                                print(f"\n{Fore.GREEN}=== 实时输出（监控中...）==={Style.RESET_ALL}")
+                                sys.stdout.flush()
+                                last_line_count = len(current_term.output)
+                            elif kl in {"k"}:
+                                ok, msg = agent.terminalManager.kill_terminal(tid, force=False)
+                                color = Fore.GREEN if ok else Fore.RED
+                                print(f"\n{color}{msg}{Style.RESET_ALL}")
+                                sys.stdout.flush()
+                                should_exit_watch = True
+                                break
+                            elif kl in {"f"}:
+                                ok, msg = agent.terminalManager.kill_terminal(tid, force=True)
+                                color = Fore.GREEN if ok else Fore.RED
+                                print(f"\n{color}{msg}{Style.RESET_ALL}")
+                                sys.stdout.flush()
+                                should_exit_watch = True
+                                break
+                            elif key == "+":
+                                interval_s = max(0.02, interval_s * 0.8)
+                                print(f"\n{Fore.CYAN}刷新间隔: {interval_s:.2f}s{Style.RESET_ALL}")
+                                sys.stdout.flush()
+                            elif key == "-":
+                                interval_s = min(5.0, interval_s * 1.25)
+                                print(f"\n{Fore.CYAN}刷新间隔: {interval_s:.2f}s{Style.RESET_ALL}")
+                                sys.stdout.flush()
+                            elif kl in {"t"}:
+                                current_term = agent.terminalManager.terminals.get(tid) or term
+                                status = agent.terminalManager.get_terminal_status(tid) or {}
+                                is_running = bool(status.get("is_running"))
+                                uptime = status.get("uptime")
+                                exit_code = status.get("exit_code")
+                                lines = len(current_term.output) if current_term and hasattr(current_term, "output") else 0
+                                up_str = f"{uptime:.1f}s" if isinstance(uptime, (int, float)) else "-"
+                                run_str = f"{Fore.GREEN}RUNNING{Style.RESET_ALL}" if is_running else f"{Fore.YELLOW}STOPPED{Style.RESET_ALL}"
+                                print(f"\n{Fore.CYAN}状态: {run_str} | uptime={up_str} | exit_code={exit_code} | 输出行={lines}{Style.RESET_ALL}")
+                                sys.stdout.flush()
+                            else:
+                                # 提示用户：常规模式下无法输入
+                                current_term = agent.terminalManager.terminals.get(tid) or term
+                                if sys.platform == "win32" and getattr(current_term, "is_long_running", False):
+                                    if current_term.process.stdout is None:
+                                         print(f"\n{Fore.YELLOW}提示: 此为交互式窗口进程，请切换到新窗口操作。按 q 退出监控。{Style.RESET_ALL}")
+                                         sys.stdout.flush()
+                                else:
+                                    print(f"\n{Fore.YELLOW}提示: 监控模式。按 i 进入交互模式可发送输入。按 q 退出监控。{Style.RESET_ALL}")
+                                    sys.stdout.flush()
+
+                        current_term = agent.terminalManager.terminals.get(tid) or term
+                        if not paused:
+                            out = getattr(current_term, "output", None)
+                            if isinstance(out, list):
+                                current_len = len(out)
+                                
+                                # 处理新增行
+                                if current_len > last_line_count:
+                                    # 先把之前未完结的行（如果有）补全
+                                    # 注意：last_line_count 指的是之前已经完整打印或部分打印过的行数
+                                    # 实际上，如果 last_line_count 指向的最后一行发生了变化（从部分变完整），我们也需要刷新它
+                                    
+                                    # 简单策略：如果之前打印过最后一行且它被更新了，我们可能需要回退并重打？
+                                    # 由于终端回退比较麻烦，我们这里采用一种简化的“流式追加”逻辑
+                                    
+                                    # 打印从 last_line_count 开始的所有新行
+                                    # 如果 last_line_count > 0，说明之前已经打印过 out[:last_line_count]
+                                    # 但 out[last_line_count-1] 可能从不完整变成了完整，或者 out[last_line_count] 是新行
+                                    
+                                    # 修正逻辑：
+                                    # 我们维护 last_printed_content 来追踪最后一行的内容
+                                    pass
+
+                                # 重新实现输出逻辑以支持行内刷新
+                                start_idx = last_line_count
+                                # 如果之前打印过行，且最后一行可能被更新（即不是以换行符结尾），我们需要检查
+                                if last_line_count > 0:
+                                    # 检查上一行是否发生了变化（例如从 partial 变成了 complete）
+                                    # 但由于我们无法轻易覆盖上一行（除非用 \r），这里简化处理：
+                                    # 如果 terminal.py 保证 append 只发生在换行时（旧逻辑），那没问题。
+                                    # 但新逻辑是 update in place。
+                                    
+                                    # 既然我们无法完美控制光标上移，我们假设：
+                                    # 如果上一行是部分内容（没换行），我们应该用 \r 覆盖它。
+                                    # 但为了简单，我们只关注“当前最后一行”的实时刷新。
+                                    pass
+
+                                # 打印完全新增的行（除了最后一行，因为最后一行可能还在变）
+                                if current_len > last_line_count:
+                                    # 如果有新行加入
+                                    # 1. 先打印那些已经确定的行
+                                    for i in range(last_line_count, current_len - 1):
+                                        print(_format_watch_line(str(out[i])).rstrip())
+                                    
+                                    # 2. 更新 last_line_count 到只剩最后一行未处理
+                                    last_line_count = current_len - 1
+                                
+                                # 处理最后一行（可能是新增的，也可能是更新的）
+                                if current_len > 0:
+                                    last_line_idx = current_len - 1
+                                    last_line_content = str(out[last_line_idx])
+                                    formatted_line = _format_watch_line(last_line_content)
+                                    
+                                    # 如果这一行是全新的（last_line_count <= last_line_idx）
+                                    # 或者这一行虽然之前打印过，但现在内容变了
+                                    # 我们使用 \r 来实现行内刷新
+                                    
+                                    # 注意：rstrip() 会去掉末尾换行符，这对于判断是否行结束很重要
+                                    # 但 _format_watch_line 返回的原始内容可能包含 \n
+                                    
+                                    has_newline = last_line_content.endswith('\n')
+                                    display_content = formatted_line.rstrip()
+                                    
+                                    if last_line_count <= last_line_idx:
+                                        # 这是新的一行（或者之前没打印完的行）
+                                        # 如果是追加模式，且不是第一行输出，我们可能需要先换行？
+                                        # 不，print默认换行。
+                                        # 我们使用 sys.stdout.write + \r 来支持刷新
+                                        
+                                        # 如果这一行已经结束了
+                                        if has_newline:
+                                            # 如果它是新行，直接打印
+                                            # 如果它是之前刷新的行，我们需要先 \r 覆盖再打印
+                                            sys.stdout.write('\r' + display_content + '\n')
+                                            last_line_count = current_len # 这一行已完结
+                                        else:
+                                            # 还没结束，使用 \r 打印
+                                            sys.stdout.write('\r' + display_content)
+                                            # 不更新 last_line_count，因为这行还没完
+                                    
+                                    sys.stdout.flush()
+
+                        try:
+                            running = current_term.process.poll() is None
+                        except Exception:
+                            running = False
+
+                        if timeout_s and (time.time() - start_watch_time) > timeout_s:
+                            print(f"\n{Fore.YELLOW}监控超时（{timeout_s:.0f}秒），自动退出{Style.RESET_ALL}")
+                            sys.stdout.flush()
+                            break
+
+                        if not running:
+                            if not paused:
+                                print(f"\n{Fore.YELLOW}进程已结束 | 退出码: {current_term.exit_code}{Style.RESET_ALL}")
+                                print(f"{Fore.YELLOW}按 q 退出，或按 t 查看状态{Style.RESET_ALL}")
+                                sys.stdout.flush()
+                                paused = True
+
+                        time.sleep(interval_s)
+
                 except KeyboardInterrupt:
-                    ui.print_info("已退出监控")
+                    print(f"\n\n{Fore.CYAN}已退出监控模式{Style.RESET_ALL}\n")
                 except Exception as e:
-                    ui.print_error(f"监控失败: {e}")
-                
+                    print(f"\n{Fore.RED}监控出错: {e}{Style.RESET_ALL}\n")
+                    import traceback
+                    traceback.print_exc()
+
                 continue
             
             if cmd == "monitor":
@@ -1304,6 +1817,8 @@ def run_cli() -> None:
                         if autosaveFilename:
                             sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
                             print(f"{Fore.GREEN}✓ 会话已自动保存: {autosaveFilename}{Style.RESET_ALL}")
+                    except KeyboardInterrupt:
+                        pass
                     except Exception:
                         pass
                 break
@@ -1352,6 +1867,8 @@ def run_cli() -> None:
                     if autosaveFilename:
                         sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
                         print(f"\n{Fore.GREEN}✓ 会话已自动保存: {autosaveFilename}{Style.RESET_ALL}")
+                except KeyboardInterrupt:
+                    pass
                 except Exception:
                     pass
                 print(f"{Fore.BLUE}小晨终端助手 正在退出...{Style.RESET_ALL}")
@@ -1361,6 +1878,8 @@ def run_cli() -> None:
                 if autosaveFilename:
                     sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
                     print(f"\n{Fore.GREEN}✓ 会话已自动保存: {autosaveFilename}{Style.RESET_ALL}")
+            except KeyboardInterrupt:
+                pass
             except Exception:
                 pass
             print(f"\n{Fore.YELLOW}⚠️  已请求中断 (Ctrl+C)。为避免误触，不会立即退出。{Style.RESET_ALL}")

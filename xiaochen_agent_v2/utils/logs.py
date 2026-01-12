@@ -42,12 +42,15 @@ def log_request(messages: List[Dict[str, str]], log_dir: Optional[str] = None) -
         json.dump(messages_to_log, f, ensure_ascii=False, indent=2)
 
 
+MAX_USAGE_HISTORY_LINES = 2000
+
+
 def append_usage_history(
     usage: Dict[str, Any],
     cache: Optional[Dict[str, Any]] = None,
     history_file: Optional[str] = None,
 ) -> None:
-    """将模型返回的 usage（以及可选缓存统计）按行追加写入日志文件。"""
+    """将模型返回的 usage（以及可选缓存统计）按行追加写入日志文件（保留最近 MAX_USAGE_HISTORY_LINES 行）。"""
     if not history_file:
         history_file = os.path.join(get_logs_root(), "void_usage_history.jsonl")
     os.makedirs(os.path.dirname(history_file), exist_ok=True)
@@ -58,8 +61,30 @@ def append_usage_history(
     }
     if cache is not None:
         record["cache"] = cache
-    with open(history_file, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    
+    new_line = json.dumps(record, ensure_ascii=False) + "\n"
+
+    try:
+        lines = []
+        if os.path.exists(history_file):
+            with open(history_file, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        
+        # 简单的滑动窗口逻辑
+        if len(lines) >= MAX_USAGE_HISTORY_LINES:
+            # 如果已满或溢出，追加新行后保留最后 N 行，并重写文件
+            lines.append(new_line)
+            lines = lines[-MAX_USAGE_HISTORY_LINES:]
+            with open(history_file, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+        else:
+            # 否则直接追加
+            with open(history_file, "a", encoding="utf-8") as f:
+                f.write(new_line)
+    except Exception:
+        # 如果读取或重写失败，降级为直接追加，确保数据不丢失
+        with open(history_file, "a", encoding="utf-8") as f:
+            f.write(new_line)
 
 
 def _sha256_text(content: str) -> str:

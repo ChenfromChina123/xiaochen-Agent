@@ -155,7 +155,7 @@ def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
                 idx = e_idx + len(end_tag)
                 continue
         elif next_tag == "run_command":
-            if _has_unclosed_subtag(inner, "command") or _has_unclosed_subtag(inner, "is_long_running") or _has_unclosed_subtag(inner, "cwd"):
+            if _has_unclosed_subtag(inner, "command") or _has_unclosed_subtag(inner, "is_long_running") or _has_unclosed_subtag(inner, "cwd") or _has_unclosed_subtag(inner, "max_wait_seconds") or _has_unclosed_subtag(inner, "interactive"):
                 idx = e_idx + len(end_tag)
                 continue
             cmd_from_tag = find_substring(inner, "command")
@@ -169,6 +169,12 @@ def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
             cwd_str = find_substring(inner, "cwd")
             if cwd_str.strip():
                 task["cwd"] = cwd_str.strip()
+            max_wait_str = find_substring(inner, "max_wait_seconds")
+            if max_wait_str.strip():
+                task["max_wait_seconds"] = max_wait_str.strip()
+            interactive_str = find_substring(inner, "interactive")
+            if interactive_str.strip():
+                task["interactive"] = interactive_str.strip()
             if not task["command"]:
                 idx = e_idx + len(end_tag)
                 continue

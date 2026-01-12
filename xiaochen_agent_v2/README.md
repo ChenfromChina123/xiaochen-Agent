@@ -89,7 +89,7 @@ python examples/rollback_example.py
 - **打断 AI 输出**：在 AI 生成回复时按 `Ctrl+C` 可以打断当前输出，保留已生成的内容并允许用户继续对话
 - **任务终止同步**：在执行 OCR 等耗时工具时按 `Ctrl+C` 会自动通知后端服务器终止对应任务，释放资源
 - **随时中断**：在工具执行确认阶段按 `Ctrl+C` 可以取消当前任务
-- **安全退出**：连续按 `Ctrl+C` 或在空闲时中断可选择退出程序并保存会话
+- **安全退出**：首次 `Ctrl+C` 仅请求中断并自动保存；1.5 秒内再次按 `Ctrl+C` 才会退出（会尝试再次自动保存）
 
 ### 📊 其他功能
 - **缓存优化**：智能缓存系统，减少 API 调用成本
@@ -156,7 +156,17 @@ xiaochen_agent_v2\packaging\build_exe.bat
 python -m xiaochen_agent_v2
 ```
 
-或手动创建 `config.json`：
+或从示例文件复制并修改：
+
+```bash
+# Windows
+copy config_samples\config.json.example config.json
+
+# Linux/Mac
+cp config_samples/config.json.example config.json
+```
+
+也可以手动创建 `config.json`：
 
 ```json
 {
@@ -226,6 +236,10 @@ agent.bat
 - **一键回退对话**：输入 `undo` 回退到上一次对话（含文件修改）
 - **增强回滚系统**：使用独立的 `RollbackManager` 提供更强大的版本控制功能（详见下方）
 - **撤回粘贴**：输入 `cancel` 或 `撤回` 撤回当前已通过 Ctrl+V 粘贴但未发送的图片
+- **查看后台进程**：输入 `ps` 查看正在运行的任务
+- **监控进程输出**：输入 `watch <id>` 进入监控模式（支持 q 退出、p 暂停、k/f 终止、c 清屏、+/- 调速、t 状态）
+- **长命令自动转后台**：命令执行若超过最大等待时间（默认约 10 秒）会返回 Terminal ID，可用 `watch <id>` 继续观察
+- **交互式程序提示**：后台命令默认不接收键盘输入（避免抢占当前终端），交互式程序请直接在终端运行
 - **查看会话列表**：输入 `sessions` 查看最近 10 个历史会话
 - **删除会话**：输入 `sessions delete <n...|--all> [-y]` 删除指定或所有会话
 - **清理会话**：输入 `sessions prune [--max-files N] [--max-age-days D] [-y]` 清理会话
@@ -323,9 +337,10 @@ User: sessions prune --max-files 10
 ```
 [Cycle 2/30] Processing...
 ^C
-⚠️  检测到中断信号 (Ctrl+C)
-   再次按 Ctrl+C 退出程序
-按回车继续，或 Ctrl+C 退出: 
+✓ 会话已自动保存: ..._autosave.json
+
+⚠️  已请求中断 (Ctrl+C)。为避免误触，不会立即退出。
+   若要强制退出，请在 1.5 秒内再按一次 Ctrl+C
 ```
 
 ### 任务执行确认
@@ -342,6 +357,25 @@ User: sessions prune --max-files 10
 [3/3] ⚙️  执行: git add .
 ```
 
+#### 交互式命令（Windows）
+
+当命令需要交互式输入（例如启动另一个 CLI 程序）时，需要启用交互模式执行，否则子进程会因为无法读取输入而退出。
+
+交互模式示例：
+
+```xml
+<run_command>
+<command>python xiaochen_agent_v2/run.py</command>
+<is_long_running>true</is_long_running>
+<cwd>.</cwd>
+<interactive>true</interactive>
+</run_command>
+```
+
+说明：
+- Windows 下交互模式会打开新的控制台窗口，且不会回传 stdout/stderr 到当前对话。
+- 若未显式指定 `interactive`，当检测到 `python xiaochen_agent_v2/run.py`（或 `python -m xiaochen_agent_v2`）且 `is_long_running=true` 时会自动启用交互模式。
+
 ## 📁 项目结构
 
 ```
@@ -349,24 +383,37 @@ xiaochen_agent_v2/
 ├── xiaochen_agent_v2/      # 主程序包
 │   ├── __init__.py         # 包初始化
 │   ├── __main__.py         # 程序入口
-│   ├── agent.py            # AI 代理核心逻辑
-│   ├── cli.py              # 命令行界面
+│   ├── agent.py            # Agent 核心逻辑
 │   ├── config.py           # 配置数据类
-│   ├── console.py          # 控制台输出
-│   ├── display.py          # 显示格式化（新增）
-│   ├── files.py            # 文件操作
-│   ├── interrupt.py        # 中断处理（新增）
-│   ├── logs.py             # 日志记录
+│   ├── config_manager.py   # 配置文件管理
 │   ├── metrics.py          # 性能指标
-│   ├── session.py          # 会话管理（新增）
+│   ├── rollback_manager.py # 回滚管理
+│   ├── session.py          # 会话管理
+│   ├── task_manager.py     # 任务管理
+│   └── terminal_output_manager.py # 终端输出管理
+├── tools/                  # 工具模块
+│   ├── executor.py         # 工具执行器
+│   ├── image.py            # 图像处理工具
+│   ├── ocr.py              # OCR 工具
+│   └── web_search.py       # 网络搜索工具
+├── ui/                     # 用户界面
+│   └── cli.py              # 命令行界面
+├── utils/                  # 通用工具
+│   ├── console.py          # 控制台输出
+│   ├── display.py          # 显示格式化
+│   ├── files.py            # 文件操作
+│   ├── interrupt.py        # 中断处理
+│   ├── logs.py             # 日志记录
 │   ├── tags.py             # 标签解析
 │   └── terminal.py         # 终端管理
-├── config_manager.py       # 配置文件管理（新增）
-├── config.json.example     # 配置文件示例（新增）
-├── agent.bat               # Windows 启动脚本（新增）
-├── agent.sh                # Linux/Mac 启动脚本（新增）
-├── install.bat             # Windows 安装脚本（新增）
-├── install.sh              # Linux/Mac 安装脚本（新增）
+├── scripts/                # 脚本目录
+│   ├── agent.bat           # Windows 启动脚本
+│   ├── install.bat         # Windows 安装脚本
+│   ├── set_env.bat         # 环境变量设置
+│   └── ...
+├── config_samples/         # 配置文件示例
+│   ├── config.json.example # 配置文件示例
+│   └── ocr_config.json.example
 ├── run.py                  # Python 运行脚本
 ├── requirements.txt        # 依赖列表
 └── README.md               # 项目文档

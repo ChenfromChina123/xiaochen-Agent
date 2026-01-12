@@ -80,6 +80,7 @@ class TerminalProcess:
     command: str
     process: subprocess.Popen
     is_long_running: bool = False
+    cwd: str = ""
     output: list = field(default_factory=list)
     exit_code: Optional[int] = None
     start_time: float = field(default_factory=time.time)
@@ -128,45 +129,109 @@ class TerminalManager:
                 # Silently fail if storage fails
                 pass
 
-    def run_command(self, command: str, is_long_running: bool = False, cwd: Optional[str] = None) -> Tuple[bool, str, str, str]:
+    def send_input(self, tid: str, data: str) -> bool:
+        """
+        向终端进程发送输入。
+        :param tid: 终端ID
+        :param data: 输入数据
+        :return: 是否发送成功
+        """
+        term = self.terminals.get(tid)
+        if not term or not term.process or term.process.poll() is not None:
+            return False
+        
+        try:
+            if term.process.stdin:
+                term.process.stdin.write(data)
+                term.process.stdin.flush()
+                return True
+        except Exception:
+            pass
+        return False
+
+    def run_command(
+        self,
+        command: str,
+        is_long_running: bool = False,
+        cwd: Optional[str] = None,
+        max_wait_seconds: float = 10.0,
+        interactive: bool = False,
+    ) -> Tuple[bool, str, str, str]:
         """
         执行指令。
         :param command: 要执行的命令
         :param is_long_running: 是否为长期停留任务（如 web 服务）
         :param cwd: 工作目录
+        :param max_wait_seconds: 最长等待时间（秒）。超时则转为后台运行并返回 Terminal ID。
+        :param interactive: 是否以交互模式运行（Windows 下会打开新控制台窗口，不采集输出）。
         :return: (是否成功启动/执行, 终端ID, 输出结果, 错误信息)
         """
         tid = str(uuid.uuid4())[:8]
         proc_uuid = str(uuid.uuid4())  # 用于进程追踪的唯一ID
         
         try:
+            try:
+                max_wait = float(max_wait_seconds)
+            except Exception:
+                max_wait = 10.0
+            if max_wait <= 0:
+                max_wait = 10.0
+            if max_wait > 600:
+                max_wait = 600.0
+
+            run_cwd = cwd or os.getcwd()
+
             # 准备环境变量
             env = os.environ.copy()
             env["XIAOCHEN_PROC_UUID"] = proc_uuid
+            # 强制 Python 子进程使用 UTF-8 编码，避免 Windows 默认编码 (GBK) 导致的编解码错误
+            env["PYTHONIOENCODING"] = "utf-8"
 
-            # 统一使用 shell 执行，并设置编码为 utf-8 以避免 Windows 上的解码错误
-            proc = subprocess.Popen(
-                command,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding='utf-8',
-                errors='replace', # 解码失败时替换字符，不抛出异常
-                cwd=cwd or os.getcwd(),
-                bufsize=1,
-                universal_newlines=True,
-                env=env
-            )
+            if interactive and sys.platform == "win32":
+                creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+                proc = subprocess.Popen(
+                    command,
+                    shell=True,
+                    stdin=None,
+                    stdout=None,
+                    stderr=None,
+                    cwd=run_cwd,
+                    env=env,
+                    creationflags=creationflags,
+                )
+            else:
+                # 默认标志
+                creationflags = 0
+                # Windows 下使用 CREATE_NEW_PROCESS_GROUP 防止父进程的 Ctrl+C 信号传播给子进程
+                if sys.platform == "win32":
+                    creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+
+                # 统一使用 shell 执行，并设置编码为 utf-8 以避免 Windows 上的解码错误
+                proc = subprocess.Popen(
+                    command,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    stdin=subprocess.PIPE,
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace', # 解码失败时替换字符，不抛出异常
+                    cwd=run_cwd,
+                    bufsize=1,
+                    universal_newlines=True,
+                    env=env,
+                    creationflags=creationflags
+                )
             
             # 记录到全局追踪器
-            ProcessTracker().add_process(command, proc.pid, proc_uuid, cwd or os.getcwd())
+            ProcessTracker().add_process(command, proc.pid, proc_uuid, run_cwd)
 
             term = TerminalProcess(
                 id=tid,
                 command=command,
                 process=proc,
                 is_long_running=is_long_running,
+                cwd=run_cwd,
                 proc_uuid=proc_uuid
             )
             self.terminals[tid] = term
@@ -177,58 +242,42 @@ class TerminalManager:
                 term.thread = threading.Thread(target=self._monitor_process, args=(term,), daemon=True)
                 term.thread.start()
 
-            if is_long_running:
-                start_monitor()
-
-                # 等待 10 秒观察进程状态
-                wait_seconds = 10
-                start_wait = time.time()
-                while time.time() - start_wait < wait_seconds:
-                    if proc.poll() is not None:
-                        # 进程在 10 秒内提前结束，说明启动失败或瞬时任务
-                        stdout, stderr = proc.communicate()
-                        term.exit_code = proc.returncode
-                        duration_ms = int((time.time() - term.start_time) * 1000)
-                        ProcessTracker().update_status(proc_uuid, "failed" if proc.returncode != 0 else "completed", proc.returncode)
-                        
-                        # Save full output to storage
-                        self._save_output_to_storage(tid, command, cwd or os.getcwd(), stdout, stderr, proc.returncode, duration_ms)
-                        
-                        output = clip_terminal_return_text(f"Stdout:\n{stdout}\nStderr:\n{stderr}", terminal_id=tid)
-                        del self.terminals[tid]
-                        return False, tid, output, f"Process exited early with code {proc.returncode}"
-                    time.sleep(0.5)
-
-                # 10 秒后仍然存活，返回已捕获的部分输出
-                initial_output = clip_terminal_return_text("".join(term.output))
-                return True, tid, f"Initial Output (10s):\n{initial_output}", ""
-            else:
-                # 短期任务：等待执行完毕并捕获输出
-                try:
-                    stdout, stderr = proc.communicate(timeout=120)
-                    term.exit_code = proc.returncode
-                    duration_ms = int((time.time() - term.start_time) * 1000)
-                    ProcessTracker().update_status(proc_uuid, "completed" if proc.returncode == 0 else "failed", proc.returncode)
-                    
-                    # Save full output to storage
-                    self._save_output_to_storage(tid, command, cwd or os.getcwd(), stdout, stderr, proc.returncode, duration_ms)
-                    
-                    output = clip_terminal_return_text(f"Stdout:\n{stdout}\nStderr:\n{stderr}", terminal_id=tid)
+            if interactive and sys.platform == "win32":
+                term.is_long_running = True
+                time.sleep(0.2)
+                if proc.poll() is not None:
+                    exit_code = proc.returncode
                     del self.terminals[tid]
-                    if proc.returncode == 0:
-                        return True, tid, output, ""
-                    else:
-                        return False, tid, output, f"Exit Code: {proc.returncode}"
-                except subprocess.TimeoutExpired:
-                    term.is_long_running = True
-                    start_monitor()
-                    time.sleep(0.2)
-                    initial_output = clip_terminal_return_text("".join(term.output))
-                    output = (
-                        "Status: running (timeout, may be waiting for input)\n"
-                        f"Initial Output:\n{initial_output}"
-                    )
-                    return True, tid, output, ""
+                    return False, tid, "", f"Exit Code: {exit_code}"
+                return True, tid, "Status: running (interactive console, output not captured)", ""
+
+            start_monitor()
+
+            try:
+                proc.wait(timeout=max_wait)
+            except subprocess.TimeoutExpired:
+                term.is_long_running = True
+                time.sleep(0.2)
+                initial_output = clip_terminal_return_text("".join(term.output), terminal_id=tid)
+                return True, tid, f"Initial Output ({int(max_wait)}s):\n{initial_output}", ""
+
+            if term.thread and term.thread.is_alive():
+                try:
+                    term.thread.join(timeout=2)
+                except Exception:
+                    pass
+
+            stdout_lines = [line.replace("stdout: ", "") for line in term.output if str(line).startswith("stdout: ")]
+            stderr_lines = [line.replace("stderr: ", "") for line in term.output if str(line).startswith("stderr: ")]
+            stdout_text = "".join(stdout_lines)
+            stderr_text = "".join(stderr_lines)
+
+            output = clip_terminal_return_text(f"Stdout:\n{stdout_text}\nStderr:\n{stderr_text}", terminal_id=tid)
+            exit_code = proc.returncode
+            del self.terminals[tid]
+            if exit_code == 0:
+                return True, tid, output, ""
+            return False, tid, output, f"Exit Code: {exit_code}"
 
         except Exception as e:
             return False, tid, "", str(e)
@@ -238,10 +287,35 @@ class TerminalManager:
         try:
             def reader(stream, prefix: str) -> None:
                 try:
-                    for line in iter(stream.readline, ""):
-                        if not line:
+                    buffer = []
+                    while True:
+                        char = stream.read(1)
+                        if not char:
+                            # End of stream, flush remaining buffer
+                            if buffer:
+                                content = "".join(buffer)
+                                if term.output and term.output[-1].startswith(f"{prefix}: ") and not term.output[-1].endswith("\n"):
+                                    term.output[-1] = f"{prefix}: {content}\n"
+                                else:
+                                    term.output.append(f"{prefix}: {content}\n")
                             break
-                        term.output.append(f"{prefix}: {line}")
+                        
+                        buffer.append(char)
+                        if char == '\n':
+                            content = "".join(buffer)
+                            if term.output and term.output[-1].startswith(f"{prefix}: ") and not term.output[-1].endswith("\n"):
+                                term.output[-1] = f"{prefix}: {content}"
+                            else:
+                                term.output.append(f"{prefix}: {content}")
+                            buffer = []
+                        else:
+                            # Update partial line in output for real-time feedback
+                            content = "".join(buffer)
+                            # If last line matches our prefix and doesn't end with newline, update it
+                            if term.output and term.output[-1].startswith(f"{prefix}: ") and not term.output[-1].endswith("\n"):
+                                term.output[-1] = f"{prefix}: {content}"
+                            else:
+                                term.output.append(f"{prefix}: {content}")
                 except Exception:
                     pass
 
@@ -266,7 +340,7 @@ class TerminalManager:
             self._save_output_to_storage(
                 term.id, 
                 term.command, 
-                os.getcwd(), 
+                term.cwd or os.getcwd(), 
                 stdout_text, 
                 stderr_text, 
                 term.exit_code,
@@ -281,12 +355,15 @@ class TerminalManager:
         if not term:
             return None
         is_running = term.process.poll() is None
+        pid = term.process.pid if term.process else None
         return {
             "id": term.id,
             "command": term.command,
             "is_running": is_running,
             "exit_code": term.exit_code,
-            "uptime": time.time() - term.start_time
+            "uptime": time.time() - term.start_time,
+            "pid": pid,
+            "is_long_running": term.is_long_running
         }
 
     def send_signal_to_terminal(self, tid: str, sig: int = 2) -> bool:

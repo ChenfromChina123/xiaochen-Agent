@@ -1,6 +1,0 @@
-# 可选依赖 - 用于增强终端UI体验
-# 安装命令: pip install -r requirements_optional.txt
-
-# Rich - 高级终端UI库（推荐）
-# 提供实时监控、漂亮的表格、进度条等功能
-rich>=13.0.0

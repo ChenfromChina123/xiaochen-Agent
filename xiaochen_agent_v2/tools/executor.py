@@ -3,6 +3,7 @@ import re
 import time
 import shutil
 import subprocess
+import sys
 from typing import Dict, List, Optional, Tuple, Any
 
 from ..utils.console import Fore, Style
@@ -519,10 +520,21 @@ class Tools:
         cmd_text = str(t["command"])
         is_long = str(t.get("is_long_running", "false")).lower() == "true"
         cwd = t.get("cwd")
+        max_wait_raw = t.get("max_wait_seconds")
+        interactive_raw = t.get("interactive")
+        interactive_specified = interactive_raw is not None and str(interactive_raw).strip() != ""
+        interactive = str(interactive_raw if interactive_raw is not None else "false").strip().lower() == "true"
         
         commands = [c.strip() for c in cmd_text.splitlines() if c.strip()]
         if not commands:
             return "FAILURE: Empty command"
+
+        def _should_force_interactive(cmd_line: str) -> bool:
+            """
+            判断是否应该自动启用交互模式（仅在用户未显式指定 interactive 时生效）。
+            """
+            # 不再强制为 Agent 自身启动新窗口，以便 watch 命令可以捕获输出并进行交互
+            return False
 
         def _resolve_dir(raw: Any, base_dir: str) -> Tuple[Optional[str], Optional[str]]:
             """
@@ -650,6 +662,16 @@ class Tools:
         # My Tools interface assumes one tool dict -> one string result.
         # If run_command handles multiple commands in one tool call, I should combine results.
         
+        try:
+            max_wait_default = float(max_wait_raw) if max_wait_raw is not None else None
+        except Exception:
+            max_wait_default = None
+        if max_wait_default is not None:
+            if max_wait_default <= 0:
+                max_wait_default = None
+            elif max_wait_default > 600:
+                max_wait_default = 600.0
+
         results = []
         for cmd in commands:
             # Block dangerous commands
@@ -687,7 +709,19 @@ class Tools:
             
             try:
                 run_cwd = os.getcwd()
-                success, tid, output, error = self.agent.terminalManager.run_command(cmd, is_long_running=is_long, cwd=run_cwd)
+                max_wait = max_wait_default
+                if max_wait is None:
+                    max_wait = 15.0 if is_long else 10.0
+                interactive_for_cmd = interactive
+                if not interactive_specified and is_long:
+                    interactive_for_cmd = _should_force_interactive(cmd)
+                success, tid, output, error = self.agent.terminalManager.run_command(
+                    cmd,
+                    is_long_running=is_long,
+                    cwd=run_cwd,
+                    max_wait_seconds=max_wait,
+                    interactive=interactive_for_cmd,
+                )
                 if success:
                     status = self.agent.terminalManager.get_terminal_status(tid)
                     isRunning = bool(status.get("is_running")) if isinstance(status, dict) else False
