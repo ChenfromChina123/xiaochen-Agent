@@ -304,18 +304,23 @@ class TerminalManager:
         """列出所有正在运行的终端进程（包括长期和短期任务）。"""
         result = []
         for t in self.terminals.values():
-            is_alive = t.process.poll() is None
-            # 只显示仍在运行的进程
-            if is_alive:
-                result.append({
-                    "id": t.id,
-                    "command": t.command,
-                    "uptime": time.time() - t.start_time,
-                    "is_running": True,
-                    "pid": t.process.pid,
-                    "proc_uuid": t.proc_uuid,
-                    "is_long_running": t.is_long_running
-                })
+            try:
+                # 使用 poll() 检查进程状态，非阻塞
+                is_alive = t.process.poll() is None
+                # 只显示仍在运行的进程
+                if is_alive:
+                    result.append({
+                        "id": t.id,
+                        "command": t.command,
+                        "uptime": time.time() - t.start_time,
+                        "is_running": True,
+                        "pid": t.process.pid,
+                        "proc_uuid": t.proc_uuid,
+                        "is_long_running": t.is_long_running
+                    })
+            except Exception:
+                # 如果获取进程信息失败，跳过该进程
+                continue
         return result
     
     def kill_terminal(self, tid: str, force: bool = False) -> Tuple[bool, str]:

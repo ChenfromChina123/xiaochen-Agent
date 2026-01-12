@@ -791,8 +791,14 @@ def run_cli() -> None:
             
             if cmd == "ps" and not args:
                 # List running processes
-                terminals = agent.terminalManager.list_terminals()
-                total_tracked = len(agent.terminalManager.terminals)
+                try:
+                    terminals = agent.terminalManager.list_terminals()
+                    total_tracked = len(agent.terminalManager.terminals)
+                except Exception as e:
+                    print(f"{Fore.RED}错误: 获取进程列表失败: {e}{Style.RESET_ALL}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
                 
                 if not terminals:
                     if total_tracked > 0:
