@@ -14,88 +14,77 @@ DEFAULT_MAX_TERMINAL_RETURN_CHARS = 2000
 def clip_terminal_return_text(text: str, max_chars: int = DEFAULT_MAX_TERMINAL_RETURN_CHARS, terminal_id: Optional[str] = None) -> str:
     """
     将终端输出按字符数截断为"仅保留尾部"。
-
+    
     Args:
-        text: 原始输出文本
+        text: 原始文本
         max_chars: 最大保留字符数
         terminal_id: 终端ID，用于提示用户查看完整输出
-
+    
     Returns:
-        截断后的文本（若未超长则原样返回）
+        截断后的文本
     """
-    if not text:
-        return ""
-    max_chars = int(max_chars or 0)
-    if max_chars <= 0:
-        return ""
     if len(text) <= max_chars:
         return text
     removed = len(text) - max_chars
     tail = text[-max_chars:]
     
-    hint = f"... (输出内容过长，为节省 token 已自动截断 {removed} 字符，仅保留末尾 {max_chars} 字符)"
+    hint = ""
     if terminal_id:
-        hint += f"\n💡 提示：输入 'terminal {terminal_id}' 或 'logs {terminal_id}' 查看完整输出"
+        hint = f"\n💡 提示：输入 'terminal {terminal_id}' 或 'logs {terminal_id}' 查看完整输出"
     
-    return f"{hint}\n{tail}"
+    return f"... (输出内容过长，为节省 token 已自动截断 {removed} 字符，仅保留末尾 {max_chars} 字符){hint}\n{tail}"
 
-def clip_terminal_return_text_head_tail(
-    text: str,
-    max_chars: int = DEFAULT_MAX_TERMINAL_RETURN_CHARS,
-    head_chars: int = 1200,
-    terminal_id: Optional[str] = None
-) -> str:
+def clip_terminal_return_text_head_tail(text: str, max_chars: int = DEFAULT_MAX_TERMINAL_RETURN_CHARS) -> str:
     """
-    将终端输出截断为"保留少量头部 + 保留尾部"。
-
-    适用于既要保留关键信息（头部如状态/标题），又要保留最新日志（尾部）的场景。
-
+    将终端输出按字符数截断为"保留头部+尾部"。
+    
     Args:
-        text: 原始输出文本
-        max_chars: 最大保留字符数（总长度上限）
-        head_chars: 头部保留字符数（不足时会自动调整以保障尾部最小长度）
-        terminal_id: 终端ID，用于提示用户查看完整输出
-
+        text: 原始文本
+        max_chars: 最大保留字符数
+    
     Returns:
-        截断后的文本（若未超长则原样返回）
+        截断后的文本（前一半 + 省略提示 + 后一半）
     """
-    if not text:
-        return ""
-    max_chars = int(max_chars or 0)
-    if max_chars <= 0:
-        return ""
     if len(text) <= max_chars:
         return text
+    removed = len(text) - max_chars
+    half = max_chars // 2
+    head = text[:half]
+    tail = text[-half:]
+    return f"{head}\n\n... (输出内容过长，为节省 token 已自动截断 {removed} 字符，保留头尾各 {half} 字符)\n💡 提示：查看具体终端 ID 的完整输出，使用 'terminal <id>' 命令\n\n{tail}"
 
-    marker = "\n... (输出内容过长，为节省 token 已自动截断，以下为末尾输出"
-    if terminal_id:
-        marker += f"，输入 'terminal {terminal_id}' 查看完整内容"
-    marker += ")\n"
+def format_duration(seconds: float) -> str:
+    """
+    将秒数格式化为友好的时间字符串
     
-    if max_chars <= len(marker) + 1:
-        return clip_terminal_return_text(text, max_chars=max_chars, terminal_id=terminal_id)
-
-    head_chars = max(0, int(head_chars or 0))
-    head_chars = min(head_chars, max_chars - len(marker) - 1)
-
-    min_tail = 200
-    if max_chars - head_chars - len(marker) < min_tail:
-        head_chars = max(0, max_chars - len(marker) - min_tail)
-
-    tail_chars = max_chars - head_chars - len(marker)
-    tail = text[-tail_chars:] if tail_chars > 0 else ""
-    return text[:head_chars] + marker + tail
+    Args:
+        seconds: 秒数
+    
+    Returns:
+        格式化后的字符串，如 "2m 30s" 或 "1h 5m"
+    """
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    elif seconds < 3600:
+        minutes = int(seconds / 60)
+        secs = int(seconds % 60)
+        return f"{minutes}m {secs}s"
+    else:
+        hours = int(seconds / 3600)
+        minutes = int((seconds % 3600) / 60)
+        return f"{hours}h {minutes}m"
 
 @dataclass
 class TerminalProcess:
     id: str
     command: str
     process: subprocess.Popen
-    is_long_running: bool
-    output: List[str] = field(default_factory=list)
-    start_time: float = field(default_factory=time.time)
+    is_long_running: bool = False
+    output: list = field(default_factory=list)
     exit_code: Optional[int] = None
+    start_time: float = field(default_factory=time.time)
     thread: Optional[threading.Thread] = None
+
     proc_uuid: str = ""  # 全局唯一追踪ID
 
 class TerminalManager:
@@ -252,74 +241,154 @@ class TerminalManager:
                     for line in iter(stream.readline, ""):
                         if not line:
                             break
-                        term.output.append(f"{prefix}{line}")
-                        if len(term.output) > 1000:
-                            term.output.pop(0)
+                        term.output.append(f"{prefix}: {line}")
                 except Exception:
-                    return
+                    pass
 
-            threads: List[threading.Thread] = []
-            if term.process.stdout is not None:
-                t1 = threading.Thread(target=reader, args=(term.process.stdout, ""), daemon=True)
-                threads.append(t1)
-                t1.start()
-            if term.process.stderr is not None:
-                t2 = threading.Thread(target=reader, args=(term.process.stderr, "[stderr] "), daemon=True)
-                threads.append(t2)
-                t2.start()
-
+            stdout_thread = threading.Thread(target=reader, args=(term.process.stdout, "stdout"), daemon=True)
+            stderr_thread = threading.Thread(target=reader, args=(term.process.stderr, "stderr"), daemon=True)
+            stdout_thread.start()
+            stderr_thread.start()
             term.process.wait()
+            stdout_thread.join(timeout=1)
+            stderr_thread.join(timeout=1)
             term.exit_code = term.process.returncode
             
-            # 进程结束，更新追踪状态
-            status = "completed" if term.exit_code == 0 else "failed"
-            ProcessTracker().update_status(term.proc_uuid, status, term.exit_code)
+            # 更新进程追踪器
+            ProcessTracker().update_status(term.proc_uuid, "completed" if term.exit_code == 0 else "failed", term.exit_code)
             
-            for t in threads:
-                t.join(timeout=0.2)
+            # Save full output when process completes
+            stdout_lines = [line.replace("stdout: ", "") for line in term.output if line.startswith("stdout: ")]
+            stderr_lines = [line.replace("stderr: ", "") for line in term.output if line.startswith("stderr: ")]
+            stdout_text = "".join(stdout_lines)
+            stderr_text = "".join(stderr_lines)
+            duration_ms = int((time.time() - term.start_time) * 1000)
+            self._save_output_to_storage(
+                term.id, 
+                term.command, 
+                os.getcwd(), 
+                stdout_text, 
+                stderr_text, 
+                term.exit_code,
+                duration_ms
+            )
         except Exception:
             pass
 
     def get_terminal_status(self, tid: str) -> Optional[Dict[str, Any]]:
-        """获取指定终端的状态和最新输出。"""
-        if tid not in self.terminals:
+        """获取指定 Terminal 的状态。"""
+        term = self.terminals.get(tid)
+        if not term:
             return None
-        
-        term = self.terminals[tid]
-        output = clip_terminal_return_text("".join(term.output[-50:]))
+        is_running = term.process.poll() is None
         return {
             "id": term.id,
             "command": term.command,
-            "is_running": term.process.poll() is None,
+            "is_running": is_running,
             "exit_code": term.exit_code,
-            "output": output
+            "uptime": time.time() - term.start_time
         }
 
-    def stop_terminal(self, tid: str) -> bool:
-        """停止并移除指定终端。"""
-        if tid not in self.terminals:
+    def send_signal_to_terminal(self, tid: str, sig: int = 2) -> bool:
+        """向指定 Terminal 发送信号（Windows 默认仅支持 SIGTERM）。"""
+        term = self.terminals.get(tid)
+        if not term:
             return False
-        
-        term = self.terminals[tid]
         try:
-            if term.process.poll() is None:
-                if os.name == 'nt':
-                    subprocess.run(f"taskkill /F /T /PID {term.process.pid}", shell=True, capture_output=True)
-                else:
-                    term.process.terminate()
-            del self.terminals[tid]
+            term.process.send_signal(sig)
             return True
         except Exception:
             return False
 
     def list_terminals(self) -> List[Dict[str, Any]]:
-        """列出所有正在运行的长期任务终端。"""
-        return [
-            {
-                "id": t.id,
-                "command": t.command,
-                "uptime": time.time() - t.start_time,
-                "is_running": t.process.poll() is None
-            }
-            for t in self.terminals.values() if t.is_long_running
-        ]
+        """列出所有正在运行的终端进程（包括长期和短期任务）。"""
+        result = []
+        for t in self.terminals.values():
+            is_alive = t.process.poll() is None
+            # 只显示仍在运行的进程
+            if is_alive:
+                result.append({
+                    "id": t.id,
+                    "command": t.command,
+                    "uptime": time.time() - t.start_time,
+                    "is_running": True,
+                    "pid": t.process.pid,
+                    "proc_uuid": t.proc_uuid,
+                    "is_long_running": t.is_long_running
+                })
+        return result
+    
+    def kill_terminal(self, tid: str, force: bool = False) -> Tuple[bool, str]:
+        """
+        终止指定的终端进程
+        
+        Args:
+            tid: 终端ID
+            force: 是否强制终止（Windows 上使用 taskkill /F）
+        
+        Returns:
+            (是否成功, 消息)
+        """
+        if tid not in self.terminals:
+            return False, f"Terminal {tid} not found"
+        
+        term = self.terminals[tid]
+        
+        try:
+            if term.process.poll() is not None:
+                # 进程已经结束
+                del self.terminals[tid]
+                return True, f"Terminal {tid} was already terminated"
+            
+            # 尝试终止进程
+            if force:
+                # 强制终止（包括子进程）
+                try:
+                    if sys.platform == "win32":
+                        subprocess.run(["taskkill", "/F", "/T", "/PID", str(term.process.pid)], 
+                                      capture_output=True, timeout=5)
+                    else:
+                        term.process.kill()
+                except Exception:
+                    term.process.kill()
+            else:
+                # 优雅终止
+                term.process.terminate()
+            
+            # 等待进程结束
+            try:
+                term.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # 超时则强制终止
+                term.process.kill()
+                term.process.wait(timeout=2)
+            
+            # 更新追踪器
+            ProcessTracker().update_status(term.proc_uuid, "killed", -1)
+            
+            # 清理
+            del self.terminals[tid]
+            return True, f"Terminal {tid} terminated successfully"
+        
+        except Exception as e:
+            return False, f"Failed to terminate terminal {tid}: {str(e)}"
+    
+    def kill_all_terminals(self) -> Tuple[int, int]:
+        """
+        终止所有正在运行的终端进程
+        
+        Returns:
+            (成功数量, 失败数量)
+        """
+        success = 0
+        failed = 0
+        
+        terminal_ids = list(self.terminals.keys())
+        for tid in terminal_ids:
+            ok, _ = self.kill_terminal(tid, force=True)
+            if ok:
+                success += 1
+            else:
+                failed += 1
+        
+        return success, failed

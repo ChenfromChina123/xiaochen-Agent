@@ -792,13 +792,17 @@ def run_cli() -> None:
             if cmd == "ps" and not args:
                 # List running processes
                 terminals = agent.terminalManager.list_terminals()
+                total_tracked = len(agent.terminalManager.terminals)
                 
                 if not terminals:
-                    print(f"{Fore.YELLOW}没有正在运行的进程{Style.RESET_ALL}")
+                    if total_tracked > 0:
+                        print(f"{Fore.YELLOW}没有正在运行的进程（已跟踪 {total_tracked} 个已结束的进程）{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.YELLOW}没有正在运行的进程{Style.RESET_ALL}")
                     continue
                 
                 print(f"\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
-                print(f"{Fore.CYAN}正在运行的进程{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}正在运行的进程 ({len(terminals)}/{total_tracked}){Style.RESET_ALL}")
                 print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
                 
                 for t in terminals:
@@ -809,8 +813,10 @@ def run_cli() -> None:
                     status_color = Fore.GREEN if t['is_running'] else Fore.RED
                     status = "RUNNING" if t['is_running'] else "STOPPED"
                     
+                    proc_type = "长期" if t.get('is_long_running') else "短期"
+                    
                     print(f"{Fore.YELLOW}[{t['id']}]{Style.RESET_ALL} {t['command'][:60]}")
-                    print(f"  状态: {status_color}{status}{Style.RESET_ALL} | PID: {t['pid']} | 运行时间: {uptime_str}")
+                    print(f"  状态: {status_color}{status}{Style.RESET_ALL} | PID: {t['pid']} | 类型: {proc_type} | 运行时间: {uptime_str}")
                     print()
                 
                 print(f"{Fore.CYAN}提示: 使用 'kill <id>' 终止进程{Style.RESET_ALL}\n")
