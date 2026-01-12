@@ -13,6 +13,7 @@ from ..utils.console import Fore, Style
 from ..core.session import SessionManager
 from ..core.config_manager import ConfigManager
 from ..utils.process_tracker import ProcessTracker
+from .terminal_ui import get_terminal_ui
 
 
 from ..utils.files import get_repo_root, prune_directory
@@ -793,66 +794,55 @@ def run_cli() -> None:
                     continue
             
             if cmd == "ps" and not args:
-                # List running processes
+                # List running processes using rich UI
+                ui = get_terminal_ui()
+                
                 try:
                     terminals = agent.terminalManager.list_terminals()
                     total_tracked = len(agent.terminalManager.terminals)
                 except Exception as e:
-                    print(f"{Fore.RED}错误: 获取进程列表失败: {e}{Style.RESET_ALL}")
+                    ui.print_error(f"获取进程列表失败: {e}")
                     import traceback
                     traceback.print_exc()
                     continue
                 
                 if not terminals:
                     if total_tracked > 0:
-                        print(f"{Fore.YELLOW}没有正在运行的进程（已跟踪 {total_tracked} 个已结束的进程）{Style.RESET_ALL}")
+                        ui.print_warning(f"没有正在运行的进程（已跟踪 {total_tracked} 个已结束的进程）")
                     else:
-                        print(f"{Fore.YELLOW}没有正在运行的进程{Style.RESET_ALL}")
+                        ui.print_warning("没有正在运行的进程")
                     continue
                 
-                print(f"\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
-                print(f"{Fore.CYAN}正在运行的进程 ({len(terminals)}/{total_tracked}){Style.RESET_ALL}")
-                print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
-                
-                for t in terminals:
-                    uptime_str = f"{int(t['uptime'])}s"
-                    if t['uptime'] >= 60:
-                        uptime_str = f"{int(t['uptime'] / 60)}m {int(t['uptime']) % 60}s"
-                    
-                    status_color = Fore.GREEN if t['is_running'] else Fore.RED
-                    status = "RUNNING" if t['is_running'] else "STOPPED"
-                    
-                    proc_type = "长期" if t.get('is_long_running') else "短期"
-                    
-                    print(f"{Fore.YELLOW}[{t['id']}]{Style.RESET_ALL} {t['command'][:60]}")
-                    print(f"  状态: {status_color}{status}{Style.RESET_ALL} | PID: {t['pid']} | 类型: {proc_type} | 运行时间: {uptime_str}")
-                    print()
-                
-                print(f"{Fore.CYAN}提示: 使用 'kill <id>' 终止进程{Style.RESET_ALL}\n")
+                # 使用 rich 表格显示
+                ui.show_process_table(terminals)
                 continue
             
             if cmd == "kill":
+                ui = get_terminal_ui()
+                
                 if not args:
-                    print(f"{Fore.YELLOW}用法:{Style.RESET_ALL}")
-                    print(f"  kill <id>        - 终止指定进程（优雅）")
-                    print(f"  kill <id> -f     - 强制终止指定进程")
-                    print(f"  kill all         - 终止所有进程")
+                    ui.print_warning("用法:")
+                    print("  kill <id>        - 终止指定进程（优雅）")
+                    print("  kill <id> -f     - 强制终止指定进程")
+                    print("  kill all         - 终止所有进程")
                     continue
                 
                 if args[0].lower() == "all":
                     # Kill all processes
                     terminals = agent.terminalManager.list_terminals()
                     if not terminals:
-                        print(f"{Fore.YELLOW}没有正在运行的进程{Style.RESET_ALL}")
+                        ui.print_warning("没有正在运行的进程")
                         continue
                     
                     confirm = input(f"{Fore.RED}确认终止所有 {len(terminals)} 个进程? (y/N): {Style.RESET_ALL}").strip().lower()
                     if confirm != "y":
-                        print(f"{Fore.YELLOW}已取消{Style.RESET_ALL}")
+                        ui.print_info("已取消")
                         continue
                     
                     success, failed = agent.terminalManager.kill_all_terminals()
-                    print(f"{Fore.GREEN}成功终止: {success}{Style.RESET_ALL} | {Fore.RED}失败: {failed}{Style.RESET_ALL}")
+                    ui.print_success(f"成功终止: {success}")
+                    if failed > 0:
+                        ui.print_error(f"失败: {failed}")
                     continue
                 
                 # Kill specific process
@@ -861,75 +851,27 @@ def run_cli() -> None:
                 
                 ok, msg = agent.terminalManager.kill_terminal(tid, force=force)
                 if ok:
-                    print(f"{Fore.GREEN}✓ {msg}{Style.RESET_ALL}")
+                    ui.print_success(msg)
                 else:
-                    print(f"{Fore.RED}✗ {msg}{Style.RESET_ALL}")
+                    ui.print_error(msg)
                 continue
             
             if cmd == "watch":
+                ui = get_terminal_ui()
+                
                 if not args:
-                    print(f"{Fore.YELLOW}用法: watch <terminal_id>{Style.RESET_ALL}")
+                    ui.print_warning("用法: watch <terminal_id>")
                     continue
                 
                 tid = args[0]
                 term = agent.terminalManager.terminals.get(tid)
                 
                 if not term:
-                    print(f"{Fore.RED}终端 {tid} 不存在{Style.RESET_ALL}")
+                    ui.print_error(f"终端 {tid} 不存在")
                     continue
                 
-                # 进入实时监控模式
-                print(f"\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
-                print(f"{Fore.CYAN}实时监控: {term.command}{Style.RESET_ALL}")
-                print(f"{Fore.CYAN}终端 ID: {tid} | PID: {term.process.pid}{Style.RESET_ALL}")
-                print(f"{Fore.CYAN}按 Ctrl+C 退出监控{Style.RESET_ALL}")
-                print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
-                
-                # 显示已有输出
-                print(f"{Fore.GREEN}=== 历史输出 (最近50行) ==={Style.RESET_ALL}")
-                if term.output:
-                    for line in term.output[-50:]:  # 只显示最近50行
-                        print(line.rstrip())
-                else:
-                    print(f"{Fore.YELLOW}(暂无输出){Style.RESET_ALL}")
-                
-                print(f"\n{Fore.GREEN}=== 实时输出 ==={Style.RESET_ALL}")
-                
-                # 实时追踪新输出
-                last_line_count = len(term.output)
-                try:
-                    while term.process.poll() is None:
-                        # 检查是否有新输出
-                        if len(term.output) > last_line_count:
-                            for line in term.output[last_line_count:]:
-                                print(line.rstrip())
-                                sys.stdout.flush()  # 立即刷新输出
-                            last_line_count = len(term.output)
-                        
-                        time.sleep(0.1)
-                    
-                    # 进程结束，显示退出信息
-                    if term.process.poll() is not None:
-                        # 显示剩余输出
-                        if len(term.output) > last_line_count:
-                            for line in term.output[last_line_count:]:
-                                print(line.rstrip())
-                        
-                        print(f"\n{Fore.YELLOW}{'=' * 80}{Style.RESET_ALL}")
-                        print(f"{Fore.YELLOW}进程已结束 | 退出码: {term.exit_code}{Style.RESET_ALL}")
-                        print(f"{Fore.YELLOW}{'=' * 80}{Style.RESET_ALL}\n")
-                    else:
-                        print(f"\n{Fore.CYAN}已退出监控模式（进程仍在运行）{Style.RESET_ALL}\n")
-                        
-                except KeyboardInterrupt:
-                    print(f"\n\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
-                    print(f"{Fore.CYAN}已退出监控模式（进程仍在运行）{Style.RESET_ALL}")
-                    print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
-                except Exception as e:
-                    print(f"\n{Fore.RED}监控出错: {e}{Style.RESET_ALL}\n")
-                    import traceback
-                    traceback.print_exc()
-                
+                # 使用高级 UI 监控进程
+                ui.watch_process(term, tid, max_duration=300)
                 continue
             
             if cmd == "monitor":
