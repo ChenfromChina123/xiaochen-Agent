@@ -886,26 +886,25 @@ def run_cli() -> None:
                 print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
                 
                 # 显示已有输出
+                print(f"{Fore.GREEN}=== 历史输出 (最近50行) ==={Style.RESET_ALL}")
                 if term.output:
                     for line in term.output[-50:]:  # 只显示最近50行
                         print(line.rstrip())
+                else:
+                    print(f"{Fore.YELLOW}(暂无输出){Style.RESET_ALL}")
+                
+                print(f"\n{Fore.GREEN}=== 实时输出 ==={Style.RESET_ALL}")
                 
                 # 实时追踪新输出
                 last_line_count = len(term.output)
                 try:
-                    import msvcrt
                     while term.process.poll() is None:
                         # 检查是否有新输出
                         if len(term.output) > last_line_count:
                             for line in term.output[last_line_count:]:
                                 print(line.rstrip())
+                                sys.stdout.flush()  # 立即刷新输出
                             last_line_count = len(term.output)
-                        
-                        # 检查键盘输入（非阻塞）
-                        if msvcrt.kbhit():
-                            key = msvcrt.getch()
-                            if key == b'\x03':  # Ctrl+C
-                                break
                         
                         time.sleep(0.1)
                     
@@ -923,15 +922,20 @@ def run_cli() -> None:
                         print(f"\n{Fore.CYAN}已退出监控模式（进程仍在运行）{Style.RESET_ALL}\n")
                         
                 except KeyboardInterrupt:
-                    print(f"\n{Fore.CYAN}已退出监控模式（进程仍在运行）{Style.RESET_ALL}\n")
+                    print(f"\n\n{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}")
+                    print(f"{Fore.CYAN}已退出监控模式（进程仍在运行）{Style.RESET_ALL}")
+                    print(f"{Fore.CYAN}{'=' * 80}{Style.RESET_ALL}\n")
                 except Exception as e:
                     print(f"\n{Fore.RED}监控出错: {e}{Style.RESET_ALL}\n")
+                    import traceback
+                    traceback.print_exc()
                 
                 continue
             
             if cmd == "monitor":
                 if not args:
                     print(f"{Fore.YELLOW}用法: monitor <terminal_id>{Style.RESET_ALL}")
+                    print(f"{Fore.YELLOW}功能说明: 在新 CMD 窗口中打开进程输出监控{Style.RESET_ALL}")
                     continue
                 
                 tid = args[0]
@@ -941,41 +945,21 @@ def run_cli() -> None:
                     print(f"{Fore.RED}终端 {tid} 不存在{Style.RESET_ALL}")
                     continue
                 
-                # 创建临时脚本来监控输出
-                import tempfile
-                script_content = f'''@echo off
-chcp 65001 > nul
-title Monitor: {term.command[:50]}
-echo ================================================================================
-echo 监控终端: {tid}
-echo 命令: {term.command}
-echo PID: {term.process.pid}
-echo ================================================================================
-echo.
-echo 正在实时显示输出...
-echo 关闭此窗口不会终止进程
-echo ================================================================================
-echo.
-
-:loop
-timeout /t 1 /nobreak > nul
-echo [刷新中...]
-goto loop
-'''
-                
+                # 简化版：在新窗口启动 watch 命令
                 try:
-                    # 创建临时批处理文件
-                    with tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='gbk') as f:
-                        f.write(script_content)
-                        script_path = f.name
+                    # 获取当前 agent 的启动命令
+                    current_script = os.path.abspath(sys.argv[0]) if sys.argv else "agent"
                     
-                    # 在新窗口中启动监控
-                    subprocess.Popen(['start', 'cmd', '/k', script_path], shell=True)
-                    print(f"{Fore.GREEN}✓ 已在新窗口中打开监控界面{Style.RESET_ALL}")
+                    # 构建在新窗口中运行 watch 的命令
+                    watch_cmd = f'start "Monitor: {term.command[:40]}" cmd /k "agent && echo. && echo 输入: watch {tid} && echo."'
+                    
+                    subprocess.Popen(watch_cmd, shell=True)
+                    print(f"{Fore.GREEN}✓ 已在新窗口中打开监控（请在新窗口中输入 'watch {tid}'）{Style.RESET_ALL}")
                     print(f"{Fore.CYAN}提示: 关闭监控窗口不会影响进程运行{Style.RESET_ALL}")
                     
                 except Exception as e:
                     print(f"{Fore.RED}打开监控窗口失败: {e}{Style.RESET_ALL}")
+                    print(f"{Fore.YELLOW}替代方案: 在当前窗口使用 'watch {tid}' 命令{Style.RESET_ALL}")
                 
                 continue
             
