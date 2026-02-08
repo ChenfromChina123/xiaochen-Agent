@@ -18,23 +18,34 @@ echo -e "${CYAN}========================================${NC}"
 echo ""
 
 # 1. 确定安装目录
-if [ -f "run.py" ] && [ -d "xiaochen_agent_v2" ]; then
-    # 如果当前目录下有 run.py 和包文件夹，说明就在根目录
+# 优先检查当前目录是否为项目根目录 (包含 run.py 和 core 文件夹)
+if [ -f "run.py" ] && [ -d "core" ]; then
     ROOT_DIR="$(pwd)"
 else
-    # 否则尝试从脚本位置推断
+    # 尝试从脚本位置推断
     SCRIPT_PATH="${BASH_SOURCE[0]}"
-    if [ -z "$SCRIPT_PATH" ]; then
-        # 如果是通过 pipe 运行且不在根目录，则无法推断
-        echo -e "${RED}[ERROR] 无法确定安装目录。请在项目根目录下运行此脚本。${NC}"
-        echo -e "例如: cd xiaochen-Agent && bash scripts/install.sh"
+    if [ -n "$SCRIPT_PATH" ]; then
+        SCRIPT_DIR="$( cd "$( dirname "$SCRIPT_PATH" )" && pwd )"
+        ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+    else
+        # 如果是通过管道运行且当前不在根目录，打印错误并退出
+        echo -e "${RED}[ERROR] 无法确定安装目录。${NC}"
+        echo -e "请进入项目根目录（包含 run.py 的目录）后运行此脚本。"
+        echo -e "例如: cd /path/to/xiaochen-Agent && curl -sSL ... | bash"
         exit 1
     fi
-    SCRIPT_DIR="$( cd "$( dirname "$SCRIPT_PATH" )" && pwd )"
-    ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 fi
 
-AGENT_EXEC="$ROOT_DIR/run.py"
+# 使用 readlink 获取绝对路径（兼容性处理）
+get_abs_path() {
+    if command -v realpath >/dev/null 2>&1; then
+        realpath "$1"
+    else
+        readlink -f "$1"
+    fi
+}
+
+AGENT_EXEC=$(get_abs_path "$ROOT_DIR/run.py")
 
 if [ ! -f "$AGENT_EXEC" ]; then
     echo -e "${RED}[ERROR] 找不到 $AGENT_EXEC。请确保在正确的目录下执行安装。${NC}"
