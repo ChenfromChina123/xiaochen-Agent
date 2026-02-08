@@ -35,5 +35,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['D:\\Users\\Administrator\\User-lab\\v2\\xiaochen_agent_v2\\static\\images\\app.ico'],
+    version='xiaochen_agent_v2\\packaging\\file_version_info.txt',
+    icon=['xiaochen_agent_v2\\static\\images\\app.ico'],
 )

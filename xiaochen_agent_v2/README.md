@@ -4,15 +4,21 @@
 
 ## 🚀 快速开始
 
-### 1. 安装
+### 1. 一键安装（推荐）
 
-在 PowerShell 中执行以下命令（推荐）：
+在终端中执行以下命令，即可在全局配置 `agent` 命令。
 
+#### Windows (PowerShell)
 ```powershell
-irm https://raw.githubusercontent.com/your-repo/master/xiaochen_agent_v2/scripts/install.ps1 | iex
+# 自动设置环境变量和别名
+irm https://raw.githubusercontent.com/ChenfromChina123/xiaochen-Agent/main/xiaochen_agent_v2/scripts/install.ps1 | iex
 ```
 
-或者手动运行脚本目录下的 `install.bat`。
+#### Linux / macOS (Bash/Zsh)
+```bash
+# 自动设置别名并初始化配置
+curl -sSL https://raw.githubusercontent.com/ChenfromChina123/xiaochen-Agent/main/xiaochen_agent_v2/scripts/install.sh | bash
+```
 
 ### 2. 使用
 

@@ -32,19 +32,27 @@ if (Test-Path $ReqFile) {
     python -m pip install -r $ReqFile
 }
 
-# 4. 配置环境变量 (PATH)
+# 4. 配置环境变量 (PATH) 和别名
 Write-Host "[3/4] 配置全局命令 'agent'..." -ForegroundColor Yellow
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 $PathItems = $UserPath -split ";" | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 
+# 添加到 PATH
 if ($PathItems -notcontains $AgentScriptsDir) {
     Write-Host "正在将 $AgentScriptsDir 添加到用户 PATH..."
     $NewPath = ($PathItems + $AgentScriptsDir) -join ";"
     [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
-    Write-Host "[SUCCESS] 已添加到 PATH。请重启终端生效。" -ForegroundColor Green
-} else {
-    Write-Host "[INFO] $AgentScriptsDir 已经在 PATH 中。" -ForegroundColor Gray
+    $env:Path += ";$AgentScriptsDir" # 当前进程立即生效
 }
+
+# 确保 agent.bat 存在
+$BatFile = Join-Path $AgentScriptsDir "agent.bat"
+if (-not (Test-Path $BatFile)) {
+    Write-Host "正在创建 agent.bat..."
+    "@echo off`npython ""$RootDir\run.py"" %*" | Out-File -FilePath $BatFile -Encoding ascii
+}
+
+Write-Host "[SUCCESS] 已配置全局命令 'agent'。可在新终端直接使用。" -ForegroundColor Green
 
 # 5. 初始化全局配置目录
 Write-Host "[4/4] 初始化全局配置目录..." -ForegroundColor Yellow
