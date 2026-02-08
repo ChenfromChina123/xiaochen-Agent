@@ -66,10 +66,10 @@ fi
 echo -e "${GREEN}[SUCCESS] 检测到 Python: $($PYTHON_CMD --version)${NC}"
 
 # 3. 安装依赖
-echo -e "${YELLOW}[2/4] 安装依赖...${NC}"
+echo -e "${YELLOW}[2/4] 正在检查/安装依赖...${NC}"
 REQ_FILE="$ROOT_DIR/requirements.txt"
 if [ -f "$REQ_FILE" ]; then
-    $PYTHON_CMD -m pip install -r "$REQ_FILE"
+    $PYTHON_CMD -m pip install -q -r "$REQ_FILE"
 fi
 
 # 4. 配置别名 (agent)
@@ -104,7 +104,7 @@ echo -e "\n$START_MARK" >> "$CONF_FILE"
 echo "$ALIAS_LINE" >> "$CONF_FILE"
 echo "$END_MARK" >> "$CONF_FILE"
 
-echo -e "${GREEN}[SUCCESS] 已在 $CONF_FILE 中更新 agent 配置${NC}"
+echo -e "${GREEN}[SUCCESS] ★★★ 小晨助手配置已就绪 ($CONF_FILE) ★★★${NC}"
 
 # 检查语法错误
 if command -v bash >/dev/null 2>&1; then

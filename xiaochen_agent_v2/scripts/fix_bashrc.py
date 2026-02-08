@@ -40,42 +40,38 @@ def fix_bashrc():
     new_lines = []
     skip_mode = False
     
-    # 定义清理正则
-    # 匹配 agent() { ... } 这种函数定义块的开始
-    func_start_re = re.compile(r'^\s*agent\s*\(\s*\)\s*\{')
-    # 匹配标记位
-    start_mark = "# >>> XIAOCHEN AGENT START >>>"
-    end_mark = "# <<< XIAOCHEN AGENT END <<<"
+    # 强制清理：移除所有与 agent 相关的行，以及可能导致错误的孤立行
+    # 我们宁愿删错也不愿留下语法错误
     
     i = 0
     while i < len(lines):
-        line_num = i + 1
         line = lines[i]
         stripped = line.strip()
+        lower_line = line.lower()
         
-        # 如果这一行被 bash 明确标记为语法错误，且包含 suspicious 字符
-        if line_num in error_lines and (stripped == "}" or stripped.startswith("local ")):
-            print(f"检测到语法错误行 {line_num}: '{stripped}'，已自动移除。")
-            i += 1
-            continue
-
-        # 处理标记位块
-        if start_mark in line:
+        # 1. 处理标记位块 (优先级最高)
+        if "# >>> XIAOCHEN AGENT" in line:
             skip_mode = True
             i += 1
             continue
-        if end_mark in line:
+        if "# <<< XIAOCHEN AGENT" in line:
             skip_mode = False
             i += 1
             continue
-            
         if skip_mode:
             i += 1
             continue
 
-        # 处理旧的函数定义块 (针对残留的 agent() { ... })
-        if func_start_re.match(line):
-            # 找到对应的闭合括号
+        # 2. 处理残留的别名和直接运行指令
+        # 如果行中包含 agent 路径且不是注释
+        if "xiaochen-agent" in lower_line or "xiaochen_agent_v2" in lower_line:
+            # 排除掉我们刚才处理的标记位
+            i += 1
+            continue
+
+        # 3. 处理函数块 agent() {
+        if re.search(r'^\s*agent\s*\(\s*\)\s*\{', line):
+            # 跳过整个块
             brace_count = line.count('{') - line.count('}')
             while i < len(lines) and brace_count > 0:
                 i += 1
@@ -84,23 +80,16 @@ def fix_bashrc():
             i += 1
             continue
 
-        # 处理残留的别名
-        if stripped.startswith("alias agent="):
+        # 4. 处理孤立的 local 和 }
+        # 在 .bashrc 顶层出现的 local 或 } 几乎都是语法错误
+        if stripped == "}" or stripped.startswith("local "):
             i += 1
             continue
             
-        # 修复孤立的 '}' (只删除那些紧跟在 agent 相关配置后的孤立大括号)
-        if stripped == "}":
-            # 检查前几行是否有 agent 关键字
-            context = "".join(new_lines[-3:]).lower()
-            if "agent" in context:
-                i += 1
-                continue
-
-        # 处理可能误用的 local (不在函数内的 local)
-        if stripped.startswith("local ") and "{" not in "".join(new_lines[-5:]): # 简单启发式判断
-             i += 1
-             continue
+        # 5. 处理残留的 alias
+        if stripped.startswith("alias agent="):
+            i += 1
+            continue
 
         new_lines.append(line)
         i += 1
