@@ -1,0 +1,4 @@
+1、Agent 支持全局运行：使用 ~/.xiaochen_agent_v2 作为全局数据根目录，存储配置、日志和缓存。
+2、两级规则加载：Agent 会同时加载全局规则 (~/.xiaochen_agent_v2/userrules) 和项目本地规则 (./userrules)，增强环境感知。
+3、安装脚本路径修复：优化了 install.sh 和 install.ps1，确保在通过管道 (curl | bash) 或手动执行时，能准确识别项目根目录并生成正确的全局命令/别名。
+4、Git 追踪优化：已将 config.json 从 Git 追踪中移除，防止 API Key 泄露和多环境部署时的合并冲突。

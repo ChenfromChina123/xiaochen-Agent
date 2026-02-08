@@ -8,11 +8,25 @@ Write-Host " Xiaochen Agent - Installation Script" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. 确定安装目录（假设脚本所在目录或当前目录）
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-if (-not $ScriptDir) { $ScriptDir = Get-Location }
-$RootDir = Split-Path -Parent $ScriptDir
+# 1. 确定安装目录
+if (Test-Path "run.py" -and Test-Path "xiaochen_agent_v2") {
+    $RootDir = Get-Location
+} else {
+    $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+    if (-not $ScriptDir) {
+        Write-Host "[ERROR] 无法确定安装目录。请在项目根目录下运行此脚本。" -ForegroundColor Red
+        return
+    }
+    $RootDir = Split-Path -Parent $ScriptDir
+}
+
 $AgentScriptsDir = Join-Path $RootDir "scripts"
+$RunFile = Join-Path $RootDir "run.py"
+
+if (-not (Test-Path $RunFile)) {
+    Write-Host "[ERROR] 找不到 $RunFile。请确保在正确的目录下执行安装。" -ForegroundColor Red
+    return
+}
 
 Write-Host "[1/4] 检查环境..." -ForegroundColor Yellow
 

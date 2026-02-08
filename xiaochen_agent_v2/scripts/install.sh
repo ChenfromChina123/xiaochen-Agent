@@ -18,9 +18,28 @@ echo -e "${CYAN}========================================${NC}"
 echo ""
 
 # 1. 确定安装目录
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+if [ -f "run.py" ] && [ -d "xiaochen_agent_v2" ]; then
+    # 如果当前目录下有 run.py 和包文件夹，说明就在根目录
+    ROOT_DIR="$(pwd)"
+else
+    # 否则尝试从脚本位置推断
+    SCRIPT_PATH="${BASH_SOURCE[0]}"
+    if [ -z "$SCRIPT_PATH" ]; then
+        # 如果是通过 pipe 运行且不在根目录，则无法推断
+        echo -e "${RED}[ERROR] 无法确定安装目录。请在项目根目录下运行此脚本。${NC}"
+        echo -e "例如: cd xiaochen-Agent && bash scripts/install.sh"
+        exit 1
+    fi
+    SCRIPT_DIR="$( cd "$( dirname "$SCRIPT_PATH" )" && pwd )"
+    ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+fi
+
 AGENT_EXEC="$ROOT_DIR/run.py"
+
+if [ ! -f "$AGENT_EXEC" ]; then
+    echo -e "${RED}[ERROR] 找不到 $AGENT_EXEC。请确保在正确的目录下执行安装。${NC}"
+    exit 1
+fi
 
 echo -e "${YELLOW}[1/4] 检查环境...${NC}"
 
