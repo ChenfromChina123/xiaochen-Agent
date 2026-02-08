@@ -75,6 +75,13 @@ fi
 # 4. 配置别名 (agent)
 echo -e "${YELLOW}[3/4] 配置全局命令 'agent'...${NC}"
 
+# 使用 Python 脚本进行强力清理，防止 shell 语法错误
+FIX_SCRIPT="$ROOT_DIR/scripts/fix_bashrc.py"
+if [ -f "$FIX_SCRIPT" ]; then
+    echo -e "${YELLOW}运行 .bashrc 修复工具...${NC}"
+    $PYTHON_CMD "$FIX_SCRIPT"
+fi
+
 # 检测使用的 Shell
 if [[ "$SHELL" == *"zsh"* ]]; then
     CONF_FILE="$HOME/.zshrc"
@@ -91,11 +98,6 @@ touch "$CONF_FILE"
 START_MARK="# >>> XIAOCHEN AGENT START >>>"
 END_MARK="# <<< XIAOCHEN AGENT END <<<"
 ALIAS_LINE="alias agent='$PYTHON_CMD $AGENT_EXEC'"
-
-# 清理旧的配置（包括可能导致语法错误的旧函数或别名）
-# 使用 sed 删除标记位之间的所有内容，以及可能残留的孤立别名
-sed -i "/$START_MARK/,/$END_MARK/d" "$CONF_FILE"
-sed -i "/alias agent=/d" "$CONF_FILE"
 
 # 添加新配置
 echo -e "\n$START_MARK" >> "$CONF_FILE"
