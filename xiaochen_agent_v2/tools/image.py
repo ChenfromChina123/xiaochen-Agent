@@ -11,28 +11,49 @@ from PIL import Image, ImageGrab
 
 def get_clipboard_text():
     """
-    使用 PowerShell 获取剪贴板中的文本内容内容
+    获取剪贴板中的文本内容内容 (Windows 使用 PowerShell, Linux 使用 xclip/wl-paste)
     
     返回:
         字符串内容，如果不是文本或获取失败则返回 None
     """
+    import platform
+    system = platform.system()
+    
     try:
-        # 使用 powershell 获取剪贴板文本
-        # -Raw 参数保留原始换行符
-        process = subprocess.Popen(
-            ['powershell', '-NoProfile', '-Command', 'Get-Clipboard -Raw'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding='utf-8'
-        )
-        stdout, stderr = process.communicate(timeout=5)
-        
-        if process.returncode == 0 and stdout.strip():
-            return stdout.strip()
+        if system == "Windows":
+            # 使用 powershell 获取剪贴板文本
+            process = subprocess.Popen(
+                ['powershell', '-NoProfile', '-Command', 'Get-Clipboard -Raw'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8'
+            )
+            stdout, stderr = process.communicate(timeout=5)
+            if process.returncode == 0 and stdout.strip():
+                return stdout.strip()
+        elif system == "Linux":
+            # 检查是否有图形界面环境
+            if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+                return None
+                
+            # 尝试使用 wl-paste (Wayland) 或 xclip (X11)
+            for cmd in [['wl-paste'], ['xclip', '-selection', 'clipboard', '-o']]:
+                try:
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    stdout, _ = process.communicate(timeout=2)
+                    if process.returncode == 0 and stdout.strip():
+                        return stdout.strip()
+                except:
+                    continue
         return None
-    except Exception as e:
-        print(f"[DEBUG] 获取剪贴板文本失败: {e}")
+    except Exception:
+        # 在服务器环境下静默失败，避免干扰
         return None
 
 def save_clipboard_file(save_dir="attachments"):
@@ -45,9 +66,17 @@ def save_clipboard_file(save_dir="attachments"):
     返回:
         成功返回保存的绝对路径，失败返回 None
     """
+    import platform
+    if platform.system() == "Linux" and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+        return None
+        
     try:
         # 1. 优先检查是否是文件列表 (HDROP)
-        img_or_files = ImageGrab.grabclipboard()
+        try:
+            img_or_files = ImageGrab.grabclipboard()
+        except Exception:
+            # 在某些 Linux 环境下 Pillow 可能会抛出异常
+            return None
         
         if isinstance(img_or_files, list):
             # 如果是文件列表，返回第一个支持的文件路径
@@ -102,8 +131,7 @@ def save_clipboard_file(save_dir="attachments"):
             pass
             
         return None
-    except Exception as e:
-        print(f"[DEBUG] 从剪贴板获取内容失败: {e}")
+    except Exception:
         return None
 
 def save_clipboard_image(save_dir="attachments"):
@@ -170,13 +198,11 @@ def save_clipboard_image(save_dir="attachments"):
             if "SUCCESS" in res.stdout and os.path.exists(temp_img):
                 # print(f"[DEBUG] PowerShell 方案成功保存: {temp_img}")
                 return os.path.abspath(temp_img)
-        except Exception as e:
-            # print(f"[DEBUG] PowerShell 备选方案失败: {e}")
+        except Exception:
             pass
                     
         return None
-    except Exception as e:
-        print(f"[DEBUG] 从剪贴板获取图片失败: {e}")
+    except Exception:
         return None
 
 def is_image_path(text):

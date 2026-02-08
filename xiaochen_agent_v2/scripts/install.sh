@@ -84,19 +84,25 @@ else
     CONF_FILE="$HOME/.profile"
 fi
 
+# 确保配置文件存在
+touch "$CONF_FILE"
+
+# 定义标记位
+START_MARK="# >>> XIAOCHEN AGENT START >>>"
+END_MARK="# <<< XIAOCHEN AGENT END <<<"
 ALIAS_LINE="alias agent='$PYTHON_CMD $AGENT_EXEC'"
 
-if grep -q "alias agent=" "$CONF_FILE"; then
-    # 更新已存在的别名
-    sed -i "s|alias agent=.*|$ALIAS_LINE|" "$CONF_FILE"
-    echo -e "${GREEN}[INFO] 已更新 $CONF_FILE 中的 agent 别名${NC}"
-else
-    # 添加新别名
-    echo "" >> "$CONF_FILE"
-    echo "# Xiaochen Agent Alias" >> "$CONF_FILE"
-    echo "$ALIAS_LINE" >> "$CONF_FILE"
-    echo -e "${GREEN}[SUCCESS] 已在 $CONF_FILE 中添加 agent 别名${NC}"
-fi
+# 清理旧的配置（包括可能导致语法错误的旧函数或别名）
+# 使用 sed 删除标记位之间的所有内容，以及可能残留的孤立别名
+sed -i "/$START_MARK/,/$END_MARK/d" "$CONF_FILE"
+sed -i "/alias agent=/d" "$CONF_FILE"
+
+# 添加新配置
+echo -e "\n$START_MARK" >> "$CONF_FILE"
+echo "$ALIAS_LINE" >> "$CONF_FILE"
+echo "$END_MARK" >> "$CONF_FILE"
+
+echo -e "${GREEN}[SUCCESS] 已在 $CONF_FILE 中更新 agent 配置${NC}"
 
 # 5. 初始化全局配置目录
 echo -e "${YELLOW}[4/4] 初始化全局配置目录...${NC}"
