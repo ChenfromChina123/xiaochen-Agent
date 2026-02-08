@@ -7,6 +7,7 @@
 import os
 import datetime
 import subprocess
+import platform
 from PIL import Image, ImageGrab
 
 def get_clipboard_text():
@@ -16,7 +17,6 @@ def get_clipboard_text():
     返回:
         字符串内容，如果不是文本或获取失败则返回 None
     """
-    import platform
     system = platform.system()
     
     try:
@@ -115,20 +115,21 @@ def save_clipboard_file(save_dir="attachments"):
             img_or_files.save(save_path, "PNG")
             return save_path
 
-        # 3. 备选方案：使用 PowerShell 检查位图 (Pillow 有时抓不到)
-        try:
-            temp_img = os.path.join(save_dir, f"temp_clip_{datetime.datetime.now().strftime('%H%M%S')}.png")
-            save_cmd = [
-                'powershell', '-NoProfile', '-Command', 
-                f'$img = Get-Clipboard -Format Image; if ($img) {{ $img.Save("{temp_img}", [System.Drawing.Imaging.ImageFormat]::Png); echo "SUCCESS" }}'
-            ]
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-            res = subprocess.run(save_cmd, capture_output=True, text=True)
-            if "SUCCESS" in res.stdout and os.path.exists(temp_img):
-                return os.path.abspath(temp_img)
-        except:
-            pass
+        # 3. 备选方案：使用 PowerShell 检查位图 (仅限 Windows)
+        if platform.system() == "Windows":
+            try:
+                temp_img = os.path.join(save_dir, f"temp_clip_{datetime.datetime.now().strftime('%H%M%S')}.png")
+                save_cmd = [
+                    'powershell', '-NoProfile', '-Command', 
+                    f'$img = Get-Clipboard -Format Image; if ($img) {{ $img.Save("{temp_img}", [System.Drawing.Imaging.ImageFormat]::Png); echo "SUCCESS" }}'
+                ]
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                res = subprocess.run(save_cmd, capture_output=True, text=True)
+                if "SUCCESS" in res.stdout and os.path.exists(temp_img):
+                    return os.path.abspath(temp_img)
+            except:
+                pass
             
         return None
     except Exception:

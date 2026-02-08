@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import subprocess
 
 def fix_bashrc():
     """
@@ -22,6 +23,19 @@ def fix_bashrc():
         f.writelines(lines)
     print(f"已备份原始文件到: {backup_path}")
 
+    # 1.5 尝试检测语法错误的行号
+    error_lines = set()
+    try:
+        res = subprocess.run(['bash', '-n', bashrc_path], capture_output=True, text=True)
+        if res.returncode != 0:
+            # 解析错误消息，例如: /root/.bashrc: line 25: syntax error...
+            for line in res.stderr.splitlines():
+                match = re.search(r'line (\d+):', line)
+                if match:
+                    error_lines.add(int(match.group(1)))
+    except:
+        pass
+
     # 2. 清理逻辑
     new_lines = []
     skip_mode = False
@@ -35,9 +49,16 @@ def fix_bashrc():
     
     i = 0
     while i < len(lines):
+        line_num = i + 1
         line = lines[i]
         stripped = line.strip()
         
+        # 如果这一行被 bash 明确标记为语法错误，且包含 suspicious 字符
+        if line_num in error_lines and (stripped == "}" or stripped.startswith("local ")):
+            print(f"检测到语法错误行 {line_num}: '{stripped}'，已自动移除。")
+            i += 1
+            continue
+
         # 处理标记位块
         if start_mark in line:
             skip_mode = True
@@ -68,11 +89,13 @@ def fix_bashrc():
             i += 1
             continue
             
-        # 修复孤立的 '}' (常见于安装中断导致的语法错误)
+        # 修复孤立的 '}' (只删除那些紧跟在 agent 相关配置后的孤立大括号)
         if stripped == "}":
-            # 如果前面没有对应的 {，则删掉它
-            i += 1
-            continue
+            # 检查前几行是否有 agent 关键字
+            context = "".join(new_lines[-3:]).lower()
+            if "agent" in context:
+                i += 1
+                continue
 
         # 处理可能误用的 local (不在函数内的 local)
         if stripped.startswith("local ") and "{" not in "".join(new_lines[-5:]): # 简单启发式判断

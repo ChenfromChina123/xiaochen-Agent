@@ -106,6 +106,14 @@ echo "$END_MARK" >> "$CONF_FILE"
 
 echo -e "${GREEN}[SUCCESS] 已在 $CONF_FILE 中更新 agent 配置${NC}"
 
+# 检查语法错误
+if command -v bash >/dev/null 2>&1; then
+    if ! bash -n "$CONF_FILE" 2>/dev/null; then
+        echo -e "${YELLOW}[WARNING] 检测到 $CONF_FILE 存在语法错误，正在尝试深度修复...${NC}"
+        $PYTHON_CMD "$FIX_SCRIPT"
+    fi
+fi
+
 # 5. 初始化全局配置目录
 echo -e "${YELLOW}[4/4] 初始化全局配置目录...${NC}"
 DATA_DIR="$HOME/.xiaochen_agent_v2"
