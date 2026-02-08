@@ -55,7 +55,7 @@ if exist "%ICON_PATH%" (
 if exist "build" rd /s /q build
 if exist "dist" rd /s /q dist
 
-pyinstaller --onefile --name "xiaochen_terminal" --console --clean %ICON_PARAM% --paths "." --add-data "xiaochen_agent_v2/static;xiaochen_agent_v2/static" --add-data "xiaochen_agent_v2/config.json;xiaochen_agent_v2" --add-data "xiaochen_agent_v2/ocr_config.json;xiaochen_agent_v2" xiaochen_agent_v2\packaging\launcher.py
+pyinstaller --onefile --name "xiaochen_terminal" --console --clean %ICON_PARAM% --version-file="xiaochen_agent_v2/packaging/file_version_info.txt" --paths "." --add-data "xiaochen_agent_v2/static;xiaochen_agent_v2/static" --add-data "xiaochen_agent_v2/config.json;xiaochen_agent_v2" --add-data "xiaochen_agent_v2/ocr_config.json;xiaochen_agent_v2" xiaochen_agent_v2\packaging\launcher.py
 
 if %errorlevel% neq 0 (
     echo [ERROR] Build failed.
@@ -64,5 +64,7 @@ if %errorlevel% neq 0 (
 )
 
 echo [4/4] Success! EXE in dist folder.
+powershell -Command "Compress-Archive -Path 'dist\xiaochen_terminal.exe' -DestinationPath 'dist\xiaochen_terminal.zip' -Force"
+echo [INFO] Created dist\xiaochen_terminal.zip
 deactivate
 pause

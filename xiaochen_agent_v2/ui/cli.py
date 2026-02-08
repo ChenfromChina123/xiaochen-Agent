@@ -3,7 +3,7 @@ import sys
 import subprocess
 import threading
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import keyboard  # 用于监听热键，需要 pip install keyboard
 
 from ..core.agent import VoidAgent
@@ -15,7 +15,7 @@ from ..core.config_manager import ConfigManager
 from ..utils.process_tracker import ProcessTracker
 
 
-from ..utils.files import get_repo_root, prune_directory
+from ..utils.files import get_repo_root, prune_directory, get_data_root
 from ..tools import save_clipboard_image, save_clipboard_file, is_image_path, get_clipboard_text
 
 def _normalize_user_input(text: str) -> str:
@@ -112,6 +112,74 @@ def _resolve_terminal_id(manager, arg_id: str) -> Optional[str]:
             
     return None
 
+def run_setup_wizard(configManager: ConfigManager) -> Dict[str, Any]:
+    """
+    设置向导。
+    引导用户配置数据存储路径和 API Key。
+    """
+    print(f"\n{Fore.CYAN}{'='*20} 设置向导 {'='*20}{Style.RESET_ALL}")
+    print("您可以随时通过输入 'setup' 命令回到此向导。")
+    
+    # 获取当前配置作为默认值
+    current_config = configManager.load_config()
+    
+    # 1. 询问存储根目录
+    # 尝试从当前配置推导存储根目录（通常是 logs_dir 的父目录）
+    current_logs_dir = current_config.get("logs_dir", "")
+    if current_logs_dir and os.path.isdir(os.path.dirname(current_logs_dir)):
+        default_storage_root = os.path.dirname(os.path.abspath(current_logs_dir))
+    else:
+        default_storage_root = os.getcwd()
+
+    print(f"\n[1/2] 数据存储路径设置")
+    print(f"所有日志、会话历史和粘贴文件将存放在此目录下。")
+    print(f"当前/默认路径: {Fore.GREEN}{default_storage_root}{Style.RESET_ALL}")
+    
+    storage_root = input(f"请输入存储根目录路径 (直接回车保持不变): ").strip()
+    if not storage_root:
+        storage_root = default_storage_root
+    
+    # 确保路径是绝对路径
+    storage_root = os.path.abspath(os.path.expanduser(storage_root))
+    
+    # 更新配置中的路径
+    logs_dir = os.path.join(storage_root, "logs")
+    storage_dir = os.path.join(storage_root, "storage")
+    
+    configManager.update_config("logs_dir", logs_dir)
+    configManager.update_config("storage_dir", storage_dir)
+    
+    print(f"已设置日志目录: {Fore.YELLOW}{logs_dir}{Style.RESET_ALL}")
+    print(f"已设置存储目录: {Fore.YELLOW}{storage_dir}{Style.RESET_ALL}")
+    
+    # 创建目录
+    os.makedirs(logs_dir, exist_ok=True)
+    os.makedirs(storage_dir, exist_ok=True)
+    
+    # 2. 询问 API Key
+    print(f"\n[2/2] API Key 设置")
+    current_api_key = current_config.get("api_key", "")
+    if current_api_key:
+        # 只显示前后几位，中间脱敏
+        masked_key = f"{current_api_key[:8]}...{current_api_key[-4:]}" if len(current_api_key) > 12 else "****"
+        print(f"当前 API Key: {Fore.GREEN}{masked_key}{Style.RESET_ALL}")
+    
+    print("请输入您的 DeepSeek 或其他兼容模型的 API Key。")
+    api_key = input("API Key (直接回车保持不变): ").strip()
+    if api_key:
+        configManager.update_config("api_key", api_key)
+        print(f"{Fore.GREEN}API Key 已更新。{Style.RESET_ALL}")
+    else:
+        if not current_api_key:
+            print(f"{Fore.YELLOW}未设置 API Key，您稍后可以在 config.json 中手动配置。{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.GREEN}保持当前 API Key 不变。{Style.RESET_ALL}")
+    
+    print(f"\n{Fore.GREEN}设置完成！配置已更新至: {configManager.config_file}{Style.RESET_ALL}")
+    print(f"{'='*50}\n")
+    
+    return configManager.load_config()
+
 def run_cli() -> None:
     """
     启动 Void Agent 的命令行交互界面。
@@ -139,6 +207,16 @@ def run_cli() -> None:
         except Exception:
             pass
 
+    # 解析命令行参数，支持指定工作目录
+    if len(sys.argv) > 1:
+        # 如果第一个参数是目录，则切换到该目录
+        potential_dir = sys.argv[1]
+        if os.path.isdir(potential_dir):
+            try:
+                os.chdir(os.path.abspath(potential_dir))
+            except Exception:
+                pass
+
     start_cwd = os.environ.get("XIAOCHEN_START_CWD") or os.environ.get("XIAOCHEN_WORKDIR")
     if start_cwd:
         target_dir = os.path.expandvars(str(start_cwd))
@@ -151,11 +229,27 @@ def run_cli() -> None:
 
 
     # 初始化配置管理器
-    config_file = os.path.join(get_repo_root(), "config.json")
-    configManager = ConfigManager(config_file=config_file)
-    savedConfig = {}
+    data_root = get_data_root()
+    os.makedirs(data_root, exist_ok=True)
     
-    if configManager:
+    config_file = os.path.join(data_root, "config.json")
+    
+    # 向后兼容：如果全局配置不存在，但源码目录下存在，则迁移或使用源码目录的
+    repo_config = os.path.join(get_repo_root(), "config.json")
+    if not os.path.exists(config_file) and os.path.exists(repo_config):
+        import shutil
+        try:
+            shutil.copy2(repo_config, config_file)
+            print(f"{Fore.GREEN}[系统] 已自动将配置文件从 {repo_config} 迁移至 {config_file}{Style.RESET_ALL}")
+        except Exception:
+            config_file = repo_config
+    
+    configManager = ConfigManager(config_file=config_file)
+    
+    # 检查是否是首次运行或缺少关键配置
+    if configManager.is_first_run():
+        savedConfig = run_setup_wizard(configManager)
+    else:
         savedConfig = configManager.load_config()
     
     # 模型预设
@@ -597,7 +691,7 @@ def run_cli() -> None:
         except:
             pass # 确保报错不影响流程
             
-        paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
+        paste_dir = os.path.join(savedConfig.get("storage_dir", os.path.join(get_repo_root(), "storage")), "pastes")
         try:
             img_path = save_clipboard_file(save_dir=paste_dir)
             if img_path:
@@ -668,7 +762,7 @@ def run_cli() -> None:
                     pending_pastes = [] # 发送后清空
                 else:
                     # 尝试获取图片/文件 (优先文件，因为 PIL 抓取图片很准确)
-                    paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
+                    paste_dir = os.path.join(savedConfig.get("storage_dir", os.path.join(get_repo_root(), "storage")), "pastes")
                     print(f"{Fore.YELLOW}[系统] 正在检查剪贴板内容...{Style.RESET_ALL}", end="\r")
                     img_path = save_clipboard_file(save_dir=paste_dir)
                     if img_path:
@@ -703,7 +797,7 @@ def run_cli() -> None:
             else:
                 doc_keywords = ["图片", "图", "识别", "ocr", "看下", "分析", "image", "pic", "这张", "pdf", "文档", "文件"]
                 if any(k in inputOfUser.lower() for k in doc_keywords) and len(inputOfUser) < 20:
-                    paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
+                    paste_dir = os.path.join(savedConfig.get("storage_dir", os.path.join(get_repo_root(), "storage")), "pastes")
                     img_path = save_clipboard_file(save_dir=paste_dir)
                     if img_path:
                         inputOfUser += f" (文件已自动关联: {img_path})"
@@ -754,7 +848,7 @@ def run_cli() -> None:
                 
                 import datetime
                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                paste_dir = os.path.join(get_repo_root(), "xiaochen_agent_v2", "storage", "pastes")
+                paste_dir = os.path.join(savedConfig.get("storage_dir", os.path.join(get_repo_root(), "storage")), "pastes")
                 os.makedirs(paste_dir, exist_ok=True)
                 
                 file_path = os.path.abspath(os.path.join(paste_dir, f"paste_{timestamp}.txt"))
@@ -787,6 +881,12 @@ def run_cli() -> None:
                         sessionManager.update_session(autosaveFilename, agent.getFullHistory(), cache_stats=agent.statsOfCache.to_dict())
                 except Exception:
                     pass
+                continue
+
+            if cmd == "setup" and not args:
+                savedConfig = run_setup_wizard(configManager)
+                # 重新初始化 agent 以加载新配置 (特别是 API Key 和路径)
+                agent = VoidAgent(config=Config(**savedConfig))
                 continue
             
             if cmd in ["terminal", "logs"]:

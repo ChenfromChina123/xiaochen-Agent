@@ -402,20 +402,43 @@ class Agent:
         self.cacheOfUserRules = None
 
     def getUserRulesCached(self) -> str:
-        """读取并缓存 userrules 内容；仅在缓存失效后才重新读取。"""
+        """读取并缓存 userrules 内容；仅在缓存失效后才重新读取。
+        
+        支持两级规则：
+        1. 全局规则：来自 get_data_root()/userrules
+        2. 项目规则：来自 当前工作目录/userrules
+        """
         if self.cacheOfUserRules is not None:
             return self.cacheOfUserRules
 
-        contentOfRules = ""
-        cwd = os.getcwd()
-        pathOfRules = os.path.join(cwd, "userrules")
-        if os.path.exists(pathOfRules):
+        from ..utils.files import get_data_root
+        
+        all_rules = []
+        
+        # 1. 加载全局规则
+        global_rules_path = os.path.join(get_data_root(), "userrules")
+        if os.path.exists(global_rules_path):
             try:
-                with open(pathOfRules, "r", encoding="utf-8") as f:
-                    contentOfRules = f.read().strip()
+                with open(global_rules_path, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        all_rules.append(f"--- Global Rules ---\n{content}")
             except Exception:
-                contentOfRules = ""
-        self.cacheOfUserRules = contentOfRules
+                pass
+        
+        # 2. 加载本地规则
+        cwd = os.getcwd()
+        local_rules_path = os.path.join(cwd, "userrules")
+        if os.path.exists(local_rules_path):
+            try:
+                with open(local_rules_path, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        all_rules.append(f"--- Local Rules ---\n{content}")
+            except Exception:
+                pass
+        
+        self.cacheOfUserRules = "\n\n".join(all_rules) if all_rules else ""
         return self.cacheOfUserRules
 
     def getProjectTreeCached(self) -> str:
@@ -473,10 +496,17 @@ class Agent:
         if self.taskManager._tasks:
             task_str = f"\n\n## 📋 CURRENT TASKS\n{self.taskManager.render()}"
 
-        # 只显示当前目录路径，不展示详细的目录和文件列表（减少token消耗）
+        # 获取当前目录的文件列表预览（Tree），增强项目感知
+        tree_str = ""
+        try:
+            tree_str = f"\n\n## 📂 PROJECT STRUCTURE\n```text\n{self.getProjectTreeCached()}\n```"
+        except Exception:
+            pass
+
+        # 只显示当前目录路径
         hint = f"Current Directory: {cwd}"
 
-        return f"""{hint}{rules_str}{task_str}
+        return f"""{hint}{tree_str}{rules_str}{task_str}
 
 ## 📥 USER INPUT
 {inputOfUser}

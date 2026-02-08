@@ -2,6 +2,32 @@
 
 一个强大的 AI 终端助手，支持多种 LLM 模型，提供智能的命令行交互体验。
 
+## 🚀 快速开始
+
+### 1. 安装
+
+在 PowerShell 中执行以下命令（推荐）：
+
+```powershell
+irm https://raw.githubusercontent.com/your-repo/master/xiaochen_agent_v2/scripts/install.ps1 | iex
+```
+
+或者手动运行脚本目录下的 `install.bat`。
+
+### 2. 使用
+
+在任意目录下直接输入：
+
+```bash
+agent
+```
+
+或者指定目录运行：
+
+```bash
+agent D:\MyProject
+```
+
 ## ✨ 主要功能
 
 ### 🤖 AI 智能助手
@@ -93,6 +119,11 @@ python examples/rollback_example.py
 
 ### 🖥️ 终端增强功能
 
+- **全局运行支持**: 可以在系统的任何目录下运行 `agent`，它将自动识别当前目录为工作区。
+- **两级规则配置**: 
+  - **全局规则**: 存放于 `~/.xiaochen_agent_v2/userrules`，适用于所有项目。
+  - **本地规则**: 存放于项目目录下的 `userrules`，仅对当前项目生效。
+- **项目感知注入**: 启动时自动将当前目录的文件树结构注入给 AI，让它更了解你的项目环境。
 - **进程管理优化**:
   - `ps`: 列表形式展示子进程信息，支持 **简单 ID** (1, 2, 3...)。
   - `watch`: 实时监控子进程输出，支持 **PID** 或 **简单 ID**。

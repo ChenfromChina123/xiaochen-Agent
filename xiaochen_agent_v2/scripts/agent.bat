@@ -52,5 +52,6 @@ if errorlevel 1 (
 
 :: Run the agent (fallback)
 "!PYTHON_EXE!" -m xiaochen_agent_v2 %*
+goto :EOF
 
 endlocal

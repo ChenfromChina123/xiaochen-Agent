@@ -58,10 +58,17 @@ class ConfigManager:
             try:
                 with open(self.config_file, "r", encoding="utf-8") as f:
                     self.config = json.load(f)
-                # 合并默认配置，确保所有键都存在
+                
+                # 兼容旧版本：如果 logs_dir 或 storage_dir 缺失，补充默认值
+                needs_save = False
                 for key, value in self.DEFAULT_CONFIG.items():
                     if key not in self.config:
                         self.config[key] = value
+                        needs_save = True
+                
+                if needs_save:
+                    self.save_config()
+                    
                 return self.config
             except Exception as e:
                 print(f"加载配置文件失败: {str(e)}")
@@ -71,6 +78,24 @@ class ConfigManager:
             # 配置文件不存在，使用默认配置
             self.config = dict(self.DEFAULT_CONFIG)
             return self.config
+
+    def is_first_run(self) -> bool:
+        """
+        检查是否是第一次运行（通过判断配置文件是否存在且包含关键配置）
+        """
+        if not os.path.exists(self.config_file):
+            return True
+        
+        # 如果文件存在但 api_key 为空，也视为需要初始化配置
+        try:
+            with open(self.config_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if not data.get("api_key"):
+                    return True
+        except Exception:
+            return True
+            
+        return False
     
     def save_config(self, config: Optional[Dict[str, Any]] = None) -> bool:
         """

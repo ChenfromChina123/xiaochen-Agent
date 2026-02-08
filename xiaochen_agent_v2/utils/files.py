@@ -14,7 +14,7 @@ import sys
 import json
 
 def get_repo_root() -> str:
-    """获取项目的根目录。如果是打包后的 EXE，则返回 EXE 所在的目录。"""
+    """获取项目的源码根目录。"""
     if getattr(sys, 'frozen', False):
         # 打包环境：sys.executable 是 EXE 的完整路径
         return os.path.dirname(os.path.abspath(sys.executable))
@@ -23,10 +23,32 @@ def get_repo_root() -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
+def get_data_root() -> str:
+    """
+    获取全局数据存储根目录。
+    优先级：环境变量 XIAOCHEN_DATA_DIR > 用户主目录下的 .xiaochen_agent_v2
+    """
+    env_dir = os.environ.get("XIAOCHEN_DATA_DIR")
+    if env_dir:
+        return os.path.abspath(env_dir)
+    
+    # 默认使用用户主目录下的隐藏文件夹
+    home = os.path.expanduser("~")
+    data_dir = os.path.join(home, ".xiaochen_agent_v2")
+    return os.path.abspath(data_dir)
+
+
 def get_logs_root() -> str:
     """获取日志根目录，支持从 config.json 读取自定义路径"""
-    root = get_repo_root()
-    config_path = os.path.join(root, "config.json")
+    # 配置文件优先在全局数据目录下寻找
+    data_root = get_data_root()
+    repo_root = get_repo_root()
+    
+    config_path = os.path.join(data_root, "config.json")
+    # 向后兼容：如果全局没有，尝试找源码目录下的
+    if not os.path.exists(config_path):
+        config_path = os.path.join(repo_root, "config.json")
+        
     logs_dir = "logs"
     
     if os.path.exists(config_path):
@@ -39,13 +61,18 @@ def get_logs_root() -> str:
             
     if os.path.isabs(logs_dir):
         return logs_dir
-    return os.path.join(root, logs_dir)
+    return os.path.join(data_root, logs_dir)
 
 
 def get_storage_root() -> str:
     """获取存储根目录，支持从 config.json 读取自定义路径"""
-    root = get_repo_root()
-    config_path = os.path.join(root, "config.json")
+    data_root = get_data_root()
+    repo_root = get_repo_root()
+    
+    config_path = os.path.join(data_root, "config.json")
+    if not os.path.exists(config_path):
+        config_path = os.path.join(repo_root, "config.json")
+        
     storage_dir = "storage"
     
     if os.path.exists(config_path):
@@ -58,7 +85,7 @@ def get_storage_root() -> str:
             
     if os.path.isabs(storage_dir):
         return storage_dir
-    return os.path.join(root, storage_dir)
+    return os.path.join(data_root, storage_dir)
 
 
 def get_sessions_dir() -> str:
