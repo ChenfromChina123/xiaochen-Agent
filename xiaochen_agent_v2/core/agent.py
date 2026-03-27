@@ -825,9 +825,9 @@ class Agent:
                                 # 2. Ollama: delta.reasoning 或 message.reasoning
                                 reasoning = ""
                                 if delta:
-                                    reasoning = delta.get("reasoning_content", "") or delta.get("reasoning", "")
+                                    reasoning = delta.get("reasoning_content", "") or delta.get("reasoning", "") or ""
                                 if not reasoning and message:
-                                    reasoning = message.get("reasoning", "")
+                                    reasoning = message.get("reasoning", "") or ""
                                 
                                 if reasoning:
                                     if not printedReasoningHeader:
