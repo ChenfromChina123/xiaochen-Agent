@@ -265,6 +265,12 @@ def run_cli() -> None:
             "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
             "modelName": "doubao-seed-1-6-251015",
             "verifySsl": False  # 基于测试脚本设置为 False
+        },
+        "3": {
+            "name": "Ollama (Local)",
+            "baseUrl": "http://localhost:11434/v1",
+            "modelName": "deepseek-r1:8b",
+            "verifySsl": False
         }
     }
 

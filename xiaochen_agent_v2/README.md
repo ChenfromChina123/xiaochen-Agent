@@ -531,6 +531,12 @@ xiaochen_agent_v2/
    - Model: `doubao-seed-1-6-251015`
    - 推荐用于：中文对话
 
+3. **Ollama (Local)**
+   - Base URL: `http://localhost:11434/v1`
+   - Model: `deepseek-r1:8b`
+   - 推荐用于：本地部署、隐私保护、离线使用
+   - 注意：需要先安装并启动 Ollama 服务
+
 ### 会话存储
 
 会话文件默认存储在 `logs/sessions/` 目录下，格式为：
