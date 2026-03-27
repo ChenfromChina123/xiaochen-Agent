@@ -76,6 +76,11 @@ class Agent:
         self._recentReadCache: Dict[Tuple[str, int, int], Tuple[float, float]] = {}
         self.clipboard: Dict[str, str] = {}
         self.tools = Tools(self)
+        
+        # Prompt Caching 相关属性
+        self._promptCacheEnabled: bool = True  # 是否启用 Prompt Caching
+        self._cachedSystemTokens: int = 0  # 系统提示词的 token 数量（用于本地缓存估算）
+        self._keepAliveDuration: str = "5m"  # Ollama 模型保持加载的时间
 
     def _require_requests(self) -> bool:
         """
@@ -322,6 +327,15 @@ class Agent:
         summary = self.renderRunningTerminals()
         if summary:
             print(f"{Style.BRIGHT}{summary}{Style.RESET_ALL}")
+
+    def printPromptCacheStatus(self) -> None:
+        """打印 Prompt Caching 状态信息。"""
+        if not self._promptCacheEnabled:
+            return
+        
+        isOllama = "localhost" in self.config.baseUrl or "127.0.0.1" in self.config.baseUrl
+        if isOllama:
+            print(f"{Fore.CYAN}[Prompt Cache] Ollama 本地模式 - 系统提示词缓存: ~{self._cachedSystemTokens} tokens | keep_alive: {self._keepAliveDuration}{Style.RESET_ALL}")
 
     def getContextOfSystem(self) -> str:
         return """# XIAOCHEN_TERMINAL - XiaoChen Terminal Assistant
@@ -749,6 +763,12 @@ class Agent:
                         messages = [msgSystem] + head + tail
                         estimateTokens = self.estimateTokensOfMessages(messages)
                     
+                    # 计算系统提示词的 token 数量（用于 Ollama Prompt Caching）
+                    if self._cachedSystemTokens == 0 and msgSystem:
+                        self._cachedSystemTokens = self.estimateTokensOfMessages([msgSystem])
+                        # 首次计算后显示 Prompt Caching 状态
+                        self.printPromptCacheStatus()
+                    
                     localHitEstimate = 0
                     if self.lastFullMessages:
                         commonPrefix = []
@@ -778,6 +798,10 @@ class Agent:
                         "stream_options": {"include_usage": True},
                         "max_tokens": 8000,
                     }
+                    
+                    # 为 Ollama 添加 keep_alive 参数，保持模型加载以优化缓存
+                    if "localhost" in self.config.baseUrl or "127.0.0.1" in self.config.baseUrl:
+                        payload["keep_alive"] = self._keepAliveDuration
 
                     replyFull = ""
                     fullReasoning = ""
@@ -883,7 +907,13 @@ class Agent:
                                     hit = int(details.get("cached_tokens") or 0)
                                 else:
                                     hit_source = "local"
-                                    if localHitEstimate > 0 and prompt > 0:
+                                    # 对于 Ollama，使用系统提示词缓存估算
+                                    if "localhost" in self.config.baseUrl or "127.0.0.1" in self.config.baseUrl:
+                                        # Ollama 本地部署，估算系统提示词为缓存命中
+                                        if self._cachedSystemTokens > 0 and prompt > 0:
+                                            hit = min(self._cachedSystemTokens, prompt)
+                                            hit_source = "ollama_local"
+                                    elif localHitEstimate > 0 and prompt > 0:
                                         hit = min(int(localHitEstimate), prompt)
                                 usageOfRequest["prompt_cache_hit_tokens"] = hit
                                 if "prompt_tokens_details" not in usageOfRequest:
@@ -902,6 +932,8 @@ class Agent:
                             rateReqStr = f"{rateReq*100:.1f}%" if rateReq is not None else "N/A"
                             if hit_source == "local":
                                 rateReqStr += " (Local)"
+                            elif hit_source == "ollama_local":
+                                rateReqStr += " (Ollama)"
                             
                             rateSessionStr = f"{rateSession*100:.1f}%" if rateSession is not None else "N/A"
                             print(
