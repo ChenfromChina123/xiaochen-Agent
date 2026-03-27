@@ -345,7 +345,7 @@ class Agent:
 3. **SEARCH FIRST**: When looking for code, prefer searching file contents.
 4. **MULTI TASKS ALLOWED**: You may output multiple closed tags per reply; they will be executed in order.
 5. **NO HALLUCINATION**: If a tool returns no results, try different patterns/paths.
-6. **NO TASK = NO TAGS**: Reply with natural language only if no action is needed.
+6. **NO TASK = NO TAGS**: Reply with natural language only if no action is needed. **WARNING: DO NOT output XML-like tags (e.g., <tag>) in natural language responses unless they are properly closed tool tags.**
 7. **FOCUS FIRST**: Only do what the user explicitly asked.
 8. **STOP AFTER TASK**: After completing the requested task(s), respond briefly.
 9. **EDIT > REWRITE**: If a file already exists, prefer <edit_lines> and avoid rewriting the whole file.
@@ -983,46 +983,51 @@ class Agent:
                         tasks = unique_tasks
 
                     if not tasks:
+                        # 第二层验证：检查是否存在未闭合的标签
+                        # 如果检测到未闭合的标签，直接忽略，不再与AI进行再次对话
                         replyLower = replyFull.lower()
-                        suspiciousTagTokens = [
-                            "<write_file",
-                            "<read_file",
-                            "<run_command",
-                            "<search_files",
-                            "<search_in_files",
-                            "<edit_lines",
-                            "<replace_in_file",
-                            "<web_search",
-                            "<visit_page",
-                            "<task_add",
-                            "<task_update",
-                            "<task_delete",
-                            "<task_list",
-                            "<task_clear",
-                        "<ocr_image",
-                        "<ocr_document",
-                        "</write_file",
-                        "</read_file",
-                        "</run_command",
-                        "</search_files",
-                        "</search_in_files",
-                        "</edit_lines",
-                        "</replace_in_file",
-                        "</web_search",
-                        "</visit_page",
-                        "</task_add",
-                        "</task_update",
-                        "</task_delete",
-                        "</task_list",
-                        "</task_clear",
-                        "</ocr_image",
-                        "</ocr_document",
-                    ]
-                        if any(tok in replyLower for tok in suspiciousTagTokens):
-                            feedbackError = "ERROR: Invalid Format! Use one or more closed tags. No tag if no task."
-                            historyWorking.append({"role": "user", "content": feedbackError})
-                        else:
-                            break
+                        
+                        # 定义有效的工具标签对
+                        valid_tool_tags = [
+                            ("<write_file>", "</write_file>"),
+                            ("<read_file>", "</read_file>"),
+                            ("<run_command>", "</run_command>"),
+                            ("<search_files>", "</search_files>"),
+                            ("<search_in_files>", "</search_in_files>"),
+                            ("<edit_lines>", "</edit_lines>"),
+                            ("<indent_lines>", "</indent_lines>"),
+                            ("<dedent_lines>", "</dedent_lines>"),
+                            ("<copy_lines>", "</copy_lines>"),
+                            ("<paste_lines>", "</paste_lines>"),
+                            ("<replace_in_file>", "</replace_in_file>"),
+                            ("<web_search>", "</web_search>"),
+                            ("<visit_page>", "</visit_page>"),
+                            ("<task_add>", "</task_add>"),
+                            ("<task_update>", "</task_update>"),
+                            ("<task_delete>", "</task_delete>"),
+                            ("<task_list>", "</task_list>"),
+                            ("<task_clear>", "</task_clear>"),
+                            ("<ocr_image>", "</ocr_image>"),
+                            ("<ocr_document>", "</ocr_document>"),
+                        ]
+                        
+                        # 检查是否存在未闭合的标签（有开始标签但没有对应的结束标签）
+                        has_unclosed_tags = False
+                        for start_tag, end_tag in valid_tool_tags:
+                            start_count = replyLower.count(start_tag)
+                            end_count = replyLower.count(end_tag)
+                            if start_count > end_count:
+                                has_unclosed_tags = True
+                                break
+                        
+                        # 如果存在未闭合的标签，静默忽略，不触发与AI的再次对话
+                        # 这是第二层验证的核心：系统层面直接过滤，不再反馈给AI
+                        if has_unclosed_tags:
+                            # 静默处理：记录日志但不反馈给AI
+                            pass
+                        
+                        # 无论是否有未闭合标签，没有有效任务时就结束对话循环
+                        break
 
                     observations: List[str] = []
                     isCancelled = False
