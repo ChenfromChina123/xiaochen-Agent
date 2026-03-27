@@ -40,6 +40,6 @@ set "SCRIPT_DIR=%~dp0"
 set "ROOT_DIR=%SCRIPT_DIR%..\.."
 for %%I in ("%ROOT_DIR%") do set "ROOT_DIR=%%~fI"
 set PYTHONPATH=%ROOT_DIR%
-.venv\Scripts\python -m xiaochen_agent_v2
+.venv\Scripts\python -m agentforge
 
 deactivate

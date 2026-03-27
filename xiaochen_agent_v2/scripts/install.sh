@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Xiaochen Agent - Linux/macOS Installation Script
+# AgentForge - Linux/macOS Installation Script
 # Usage: curl -sSL https://path.to/install.sh | bash
 
 set -e
@@ -13,7 +13,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 echo -e "${CYAN}========================================${NC}"
-echo -e "${CYAN} Xiaochen Agent - Installation Script   ${NC}"
+echo -e "${CYAN} AgentForge - Installation Script   ${NC}"
 echo -e "${CYAN}========================================${NC}"
 echo ""
 
@@ -31,7 +31,7 @@ else
         # 如果是通过管道运行且当前不在根目录，打印错误并退出
         echo -e "${RED}[ERROR] 无法确定安装目录。${NC}"
         echo -e "请进入项目根目录（包含 run.py 的目录）后运行此脚本。"
-        echo -e "例如: cd /path/to/xiaochen-Agent && curl -sSL ... | bash"
+        echo -e "例如: cd /path/to/AgentForge && curl -sSL ... | bash"
         exit 1
     fi
 fi
@@ -95,8 +95,8 @@ fi
 touch "$CONF_FILE"
 
 # 定义标记位
-START_MARK="# >>> XIAOCHEN AGENT START >>>"
-END_MARK="# <<< XIAOCHEN AGENT END <<<"
+START_MARK="# >>> AGENTFORGE START >>>"
+END_MARK="# <<< AGENTFORGE END <<<"
 ALIAS_LINE="alias agent='$PYTHON_CMD $AGENT_EXEC'"
 
 # 添加新配置
@@ -104,7 +104,7 @@ echo -e "\n$START_MARK" >> "$CONF_FILE"
 echo "$ALIAS_LINE" >> "$CONF_FILE"
 echo "$END_MARK" >> "$CONF_FILE"
 
-echo -e "${GREEN}[SUCCESS] ★★★ 小晨助手配置已就绪 ($CONF_FILE) ★★★${NC}"
+echo -e "${GREEN}[SUCCESS] ★★★ 智匠 AgentForge 配置已就绪 ($CONF_FILE) ★★★${NC}"
 
 # 检查语法错误
 if command -v bash >/dev/null 2>&1; then
@@ -116,7 +116,7 @@ fi
 
 # 5. 初始化全局配置目录
 echo -e "${YELLOW}[4/4] 初始化全局配置目录...${NC}"
-DATA_DIR="$HOME/.xiaochen_agent_v2"
+DATA_DIR="$HOME/.agentforge"
 if [ ! -d "$DATA_DIR" ]; then
     mkdir -p "$DATA_DIR"
     echo -e "${GREEN}[SUCCESS] 已创建配置目录: $DATA_DIR${NC}"

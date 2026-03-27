@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo Xiaochen Agent - Environment Setup
+echo AgentForge - Environment Setup
 echo ========================================
 echo.
 
@@ -15,9 +15,9 @@ for %%I in ("%ROOT_DIR%") do set "ROOT_DIR=%%~fI"
 echo [INFO] Setting environment variables...
 echo.
 
-:: Set XIAOCHEN_AGENT_HOME environment variable
-setx XIAOCHEN_AGENT_HOME "%ROOT_DIR%"
-echo [SUCCESS] XIAOCHEN_AGENT_HOME set to: %ROOT_DIR%
+:: Set AGENTFORGE_HOME environment variable
+setx AGENTFORGE_HOME "%ROOT_DIR%"
+echo [SUCCESS] AGENTFORGE_HOME set to: %ROOT_DIR%
 
 :: Add scripts directory to PATH
 set "NEW_PATH=%PATH%"

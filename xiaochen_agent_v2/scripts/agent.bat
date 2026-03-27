@@ -6,11 +6,11 @@ setlocal enabledelayedexpansion
 set "SCRIPT_DIR=%~dp0"
 set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 
-:: Package directory (xiaochen_agent_v2)
+:: Package directory (agentforge)
 set "PACKAGE_DIR=%SCRIPT_DIR%\.."
 for %%I in ("%PACKAGE_DIR%") do set "PACKAGE_DIR=%%~fI"
 
-:: Root directory (parent of xiaochen_agent_v2)
+:: Root directory (parent of agentforge)
 set "ROOT_DIR=%PACKAGE_DIR%\.."
 for %%I in ("%ROOT_DIR%") do set "ROOT_DIR=%%~fI"
 
@@ -24,13 +24,13 @@ if defined PYTHONPATH (
 :: Prefer Python 3.13 (py launcher), then python3.13, then python
 py -3.13 --version >nul 2>&1
 if %errorlevel% equ 0 (
-    py -3.13 -m xiaochen_agent_v2 %*
+    py -3.13 -m agentforge %*
     goto :EOF
 )
 
 python3.13 --version >nul 2>&1
 if %errorlevel% equ 0 (
-    python3.13 -m xiaochen_agent_v2 %*
+    python3.13 -m agentforge %*
     goto :EOF
 )
 
@@ -51,7 +51,7 @@ if errorlevel 1 (
 )
 
 :: Run the agent (fallback)
-"!PYTHON_EXE!" -m xiaochen_agent_v2 %*
+"!PYTHON_EXE!" -m agentforge %*
 goto :EOF
 
 endlocal

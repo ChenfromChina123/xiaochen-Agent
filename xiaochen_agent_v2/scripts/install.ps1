@@ -1,15 +1,15 @@
-# Xiaochen Agent - PowerShell Installation Script
+# AgentForge - PowerShell Installation Script
 # Usage: irm https://path.to/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host " Xiaochen Agent - Installation Script" -ForegroundColor Cyan
+Write-Host " AgentForge - Installation Script" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # 1. 确定安装目录
-if (Test-Path "run.py" -and Test-Path "xiaochen_agent_v2") {
+if (Test-Path "run.py" -and Test-Path "agentforge") {
     $RootDir = Get-Location
 } else {
     $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -70,7 +70,7 @@ Write-Host "[SUCCESS] 已配置全局命令 'agent'。可在新终端直接使�
 
 # 5. 初始化全局配置目录
 Write-Host "[4/4] 初始化全局配置目录..." -ForegroundColor Yellow
-$DataDir = Join-Path $env:USERPROFILE ".xiaochen_agent_v2"
+$DataDir = Join-Path $env:USERPROFILE ".agentforge"
 if (-not (Test-Path $DataDir)) {
     New-Item -ItemType Directory -Path $DataDir | Out-Null
     Write-Host "[SUCCESS] 已创建配置目录: $DataDir" -ForegroundColor Green

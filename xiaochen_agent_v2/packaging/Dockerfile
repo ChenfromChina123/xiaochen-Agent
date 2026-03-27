@@ -14,8 +14,8 @@ WORKDIR /app
 COPY . .
 
 # Grant execution permission
-RUN chmod +x xiaochen_agent_v2/packaging/build_linux.sh
+RUN chmod +x agentforge/packaging/build_linux.sh
 
 # Run the build script
 # The script creates a venv and runs pyinstaller
-RUN ./xiaochen_agent_v2/packaging/build_linux.sh
+RUN ./agentforge/packaging/build_linux.sh

@@ -338,7 +338,7 @@ class Agent:
             print(f"{Fore.CYAN}[Prompt Cache] Ollama 本地模式 - 系统提示词缓存: ~{self._cachedSystemTokens} tokens | keep_alive: {self._keepAliveDuration}{Style.RESET_ALL}")
 
     def getContextOfSystem(self) -> str:
-        return """# XIAOCHEN_TERMINAL - XiaoChen Terminal Assistant
+        return """# AGENTFORGE_TERMINAL - 智匠 AgentForge
 ## 🔴 VOID RULES (STRICT ADHERENCE REQUIRED)
 1. **PROJECT AWARENESS**: Before making assumptions, explore the project structure.
 2. **PASSIVE VALIDATION**: Do NOT execute commands blindly. You must PROPOSE actions. The user validates.
@@ -809,7 +809,7 @@ class Agent:
                     printedReasoningHeader = False
                     printedAnswerHeader = False
                     usageOfRequest: Optional[Dict[str, Any]] = None
-                    print(f"{Fore.GREEN}[小晨终端助手]: ", end="")
+                    print(f"{Fore.GREEN}[智匠 AgentForge]: ", end="")
                     try:
                         response = requests.post(
                             self.endpointOfChat, 

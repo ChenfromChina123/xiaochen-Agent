@@ -15,7 +15,7 @@ def fix_bashrc():
         return
 
     # 1. 备份
-    backup_path = bashrc_path + ".bak_xiaochen"
+    backup_path = bashrc_path + ".bak_agentforge"
     with open(bashrc_path, 'r', encoding='utf-8', errors='ignore') as f:
         lines = f.readlines()
     
@@ -50,11 +50,11 @@ def fix_bashrc():
         lower_line = line.lower()
         
         # 1. 处理标记位块 (优先级最高)
-        if "# >>> XIAOCHEN AGENT" in line:
+        if "# >>> AGENTFORGE" in line or "# >>> XIAOCHEN AGENT" in line:
             skip_mode = True
             i += 1
             continue
-        if "# <<< XIAOCHEN AGENT" in line:
+        if "# <<< AGENTFORGE" in line or "# <<< XIAOCHEN AGENT" in line:
             skip_mode = False
             i += 1
             continue
@@ -64,7 +64,7 @@ def fix_bashrc():
 
         # 2. 处理残留的别名和直接运行指令
         # 如果行中包含 agent 路径且不是注释
-        if "xiaochen-agent" in lower_line or "xiaochen_agent_v2" in lower_line:
+        if "agentforge" in lower_line or "xiaochen-agent" in lower_line or "xiaochen_agent_v2" in lower_line:
             # 排除掉我们刚才处理的标记位
             i += 1
             continue

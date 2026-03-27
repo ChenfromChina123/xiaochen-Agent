@@ -29,13 +29,13 @@ VSVersionInfo(
       [
       StringTable(
         u'040904B0',
-        [StringStruct(u'CompanyName', u'Xiaochen'),
-        StringStruct(u'FileDescription', u'Xiaochen Terminal AI Assistant'),
+        [StringStruct(u'CompanyName', u'AgentForge'),
+        StringStruct(u'FileDescription', u'AgentForge Terminal AI Assistant'),
         StringStruct(u'FileVersion', u'2.0.0'),
-        StringStruct(u'InternalName', u'xiaochen_terminal'),
-        StringStruct(u'LegalCopyright', u'Copyright (c) 2026 Xiaochen'),
-        StringStruct(u'OriginalFilename', u'xiaochen_terminal.exe'),
-        StringStruct(u'ProductName', u'Xiaochen Terminal Agent'),
+        StringStruct(u'InternalName', u'agentforge_terminal'),
+        StringStruct(u'LegalCopyright', u'Copyright (c) 2026 AgentForge'),
+        StringStruct(u'OriginalFilename', u'agentforge_terminal.exe'),
+        StringStruct(u'ProductName', u'智匠 AgentForge'),
         StringStruct(u'ProductVersion', u'2.0.0')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])

@@ -26,7 +26,7 @@ def get_repo_root() -> str:
 def get_data_root() -> str:
     """
     获取全局数据存储根目录。
-    优先级：环境变量 XIAOCHEN_DATA_DIR > 用户主目录下的 .xiaochen_agent_v2
+    优先级：环境变量 AGENTFORGE_DATA_DIR > 用户主目录下的 .agentforge
     """
     env_dir = os.environ.get("XIAOCHEN_DATA_DIR")
     if env_dir:
@@ -34,7 +34,7 @@ def get_data_root() -> str:
     
     # 默认使用用户主目录下的隐藏文件夹
     home = os.path.expanduser("~")
-    data_dir = os.path.join(home, ".xiaochen_agent_v2")
+    data_dir = os.path.join(home, ".agentforge")
     return os.path.abspath(data_dir)
 
 

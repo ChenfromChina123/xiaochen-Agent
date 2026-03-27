@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo Xiaochen Agent - Environment Setup (Simple)
+echo AgentForge - Environment Setup (Simple)
 echo ========================================
 echo.
 
@@ -15,9 +15,9 @@ for %%I in ("%ROOT_DIR%") do set "ROOT_DIR=%%~fI"
 echo [INFO] Setting environment variables...
 echo.
 
-:: Set XIAOCHEN_AGENT_HOME environment variable
-setx XIAOCHEN_AGENT_HOME "%ROOT_DIR%"
-echo [SUCCESS] XIAOCHEN_AGENT_HOME set to: %ROOT_DIR%
+:: Set AGENTFORGE_HOME environment variable
+setx AGENTFORGE_HOME "%ROOT_DIR%"
+echo [SUCCESS] AGENTFORGE_HOME set to: %ROOT_DIR%
 
 :: Create an alias command in user's profile
 echo Creating alias in user profile...
@@ -51,5 +51,5 @@ echo [INFO] Environment setup completed!
 echo.
 echo [USAGE] You can now use:
 echo         agent        - Start the agent (if added to PATH)
-echo         Or navigate to %ROOT_DIR% and use python -m xiaochen_agent_v2
+echo         Or navigate to %ROOT_DIR% and use python -m agentforge
 pause

@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo Xiaochen Agent - Installation Script
+echo AgentForge - Installation Script
 echo ========================================
 echo.
 

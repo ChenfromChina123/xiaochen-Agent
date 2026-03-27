@@ -217,7 +217,7 @@ def run_cli() -> None:
             except Exception:
                 pass
 
-    start_cwd = os.environ.get("XIAOCHEN_START_CWD") or os.environ.get("XIAOCHEN_WORKDIR")
+    start_cwd = os.environ.get("AGENTFORGE_START_CWD") or os.environ.get("AGENTFORGE_WORKDIR")
     if start_cwd:
         target_dir = os.path.expandvars(str(start_cwd))
         if os.path.isdir(target_dir):
@@ -397,7 +397,7 @@ def run_cli() -> None:
     tokenThreshold = savedConfig.get("token_threshold", 30000)
 
     if not apiKey:
-        print(f"{Fore.CYAN}=== 小晨终端助手 (XIAOCHEN_TERMINAL) ==={Style.RESET_ALL}")
+        print(f"{Fore.CYAN}=== 智匠 AgentForge (AGENTFORGE_TERMINAL) ==={Style.RESET_ALL}")
         for k, v in PRESETS.items():
             print(f"{k}. {v['name']}")
         
@@ -672,7 +672,7 @@ def run_cli() -> None:
             # 常见的终端关键词
             terminal_keywords = [
                 "cmd.exe", "powershell", "windows terminal", "conhost", 
-                "agent.bat", "xiaochen", "terminal", "trae", "code", "visual studio"
+                "agent.bat", "agentforge", "terminal", "trae", "code", "visual studio"
             ]
             is_active = any(k in title for k in terminal_keywords)
             # print(f"[DEBUG] Window Title: {title}, Is Active: {is_active}") # 调试用
@@ -1977,7 +1977,7 @@ def run_cli() -> None:
                     pass
                 except Exception:
                     pass
-                print(f"{Fore.BLUE}小晨终端助手 正在退出...{Style.RESET_ALL}")
+                print(f"{Fore.BLUE}智匠 AgentForge 正在退出...{Style.RESET_ALL}")
                 break
             last_ctrl_c_time = now
             try:

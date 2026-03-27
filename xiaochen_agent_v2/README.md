@@ -1,4 +1,4 @@
-# 小晨终端助手 (XIAOCHEN_TERMINAL)
+# 智匠 AgentForge (AGENTFORGE_TERMINAL)
 
 一个强大的 AI 终端助手，支持多种 LLM 模型，提供智能的命令行交互体验。
 
@@ -11,13 +11,13 @@
 #### Windows (PowerShell)
 ```powershell
 # 自动设置环境变量和别名
-irm https://raw.githubusercontent.com/ChenfromChina123/xiaochen-Agent/main/xiaochen_agent_v2/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/ChenfromChina123/AgentForge/main/agentforge/scripts/install.ps1 | iex
 ```
 
 #### Linux / macOS (Bash/Zsh)
 ```bash
 # 自动设置别名并初始化配置
-curl -sSL https://raw.githubusercontent.com/ChenfromChina123/xiaochen-Agent/main/xiaochen_agent_v2/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/ChenfromChina123/AgentForge/main/agentforge/scripts/install.sh | bash
 ```
 
 ### 2. 使用
@@ -63,7 +63,7 @@ agent D:\MyProject
 #### 使用示例
 
 ```python
-from xiaochen_agent_v2.core.rollback_manager import RollbackManager
+from agentforge.core.rollback_manager import RollbackManager
 
 # 初始化回滚管理器
 rm = RollbackManager()
@@ -95,7 +95,7 @@ rm.cleanup_old_versions(keep_recent=5, keep_tagged=True)
 
 #### 运行示例
 ```bash
-cd xiaochen_agent_v2
+cd agentforge
 python examples/rollback_example.py
 ```
 
@@ -127,7 +127,7 @@ python examples/rollback_example.py
 
 - **全局运行支持**: 可以在系统的任何目录下运行 `agent`，它将自动识别当前目录为工作区。
 - **两级规则配置**: 
-  - **全局规则**: 存放于 `~/.xiaochen_agent_v2/userrules`，适用于所有项目。
+  - **全局规则**: 存放于 `~/.agentforge/userrules`，适用于所有项目。
   - **本地规则**: 存放于项目目录下的 `userrules`，仅对当前项目生效。
 - **项目感知注入**: 启动时自动将当前目录的文件树结构注入给 AI，让它更了解你的项目环境。
 - **进程管理优化**:
@@ -149,12 +149,12 @@ python examples/rollback_example.py
 ### 📁 项目结构优化
 
 为了提高可维护性，项目进行了模块化重组：
-- `xiaochen_agent_v2/core/`: 核心逻辑（AI 模型对接、回滚系统、会话管理）。
-- `xiaochen_agent_v2/ui/`: 用户界面相关（CLI 逻辑、显示优化）。
-- `xiaochen_agent_v2/utils/`: 通用工具（终端管理、日志系统、OCR 接口）。
-- `xiaochen_agent_v2/tools/`: AI 插件工具集。
-- `xiaochen_agent_v2/scripts/`: 环境设置和辅助脚本。
-- `xiaochen_agent_v2/config_samples/`: 配置文件示例。
+- `agentforge/core/`: 核心逻辑（AI 模型对接、回滚系统、会话管理）。
+- `agentforge/ui/`: 用户界面相关（CLI 逻辑、显示优化）。
+- `agentforge/utils/`: 通用工具（终端管理、日志系统、OCR 接口）。
+- `agentforge/tools/`: AI 插件工具集。
+- `agentforge/scripts/`: 环境设置和辅助脚本。
+- `agentforge/config_samples/`: 配置文件示例。
 - **任务管理**：内置任务列表，跟踪执行进度
 - **日志记录**：完整的操作日志和使用统计
 
@@ -197,10 +197,10 @@ pip install -r requirements.txt
 1. 运行打包脚本：
 
 ```cmd
-xiaochen_agent_v2\packaging\build_exe.bat
+agentforge\packaging\build_exe.bat
 ```
 
-2. 打包完成后，在项目根目录的 `dist` 文件夹下会生成 `xiaochen_terminal.exe`。
+2. 打包完成后，在项目根目录的 `dist` 文件夹下会生成 `agentforge_terminal.exe`。
 3. 您可以将该 EXE 文件移动到任何位置直接运行，无需安装 Python 环境。
 
 #### 2. 配置 API Key（三种方式任选其一）
@@ -210,7 +210,7 @@ xiaochen_agent_v2\packaging\build_exe.bat
 首次运行时，程序会提示输入 API Key，并自动保存到 `config.json`：
 
 ```bash
-python -m xiaochen_agent_v2
+python -m agentforge
 ```
 
 或从示例文件复制并修改：
@@ -244,13 +244,13 @@ cp config_samples/config.json.example config.json
 set VOID_API_KEY=your_api_key_here
 set VOID_BASE_URL=https://api.deepseek.com
 set VOID_MODEL=deepseek-chat
-set XIAOCHEN_START_CWD=D:\your\project\path  # 设置 Agent 启动时的初始目录
+set AGENTFORGE_START_CWD=D:\your\project\path  # 设置 Agent 启动时的初始目录
 
 # Linux/Mac
 export VOID_API_KEY=your_api_key_here
 export VOID_BASE_URL=https://api.deepseek.com
 export VOID_MODEL=deepseek-chat
-export XIAOCHEN_START_CWD=/your/project/path
+export AGENTFORGE_START_CWD=/your/project/path
 ```
 
 **方式 C：每次启动时输入**
@@ -261,7 +261,7 @@ export XIAOCHEN_START_CWD=/your/project/path
 
 ```bash
 # 方式 1：使用 Python 模块
-python -m xiaochen_agent_v2
+python -m agentforge
 
 # 方式 2：使用启动脚本
 python run.py
@@ -287,7 +287,7 @@ agent.bat
 
 - **正常对话**：直接输入问题或指令
 - **保存会话**：输入 `save` 保存当前会话
-- **自动保存**：对话过程中自动保存到 `xiaochen_agent_v2/logs/sessions/*_autosave.json`，退出时也会自动保存
+- **自动保存**：对话过程中自动保存到 `agentforge/logs/sessions/*_autosave.json`，退出时也会自动保存
 - **清空历史**：输入 `clear` 清空会话历史
 - **回滚操作**：输入 `rollback` 撤销上一次文件操作
 - **一键回退对话**：输入 `undo` 回退到上一次对话（含文件修改）
@@ -309,7 +309,7 @@ agent.bat
 - **设置密钥**：输入 `model key <api_key>` 更新 API Key
 - **退出程序**：输入 `exit` 或 `quit`
 - **帮助命令**：输入 `help` 或 `?` 显示命令帮助信息
-- **关键词判定**：当系统关键词后还跟随其他文本时，会按“正常对话”处理（例如 `help 配置怎么写`）
+- **关键词判定**：当系统关键词后还跟随其他文本时，会按"正常对话"处理（例如 `help 配置怎么写`）
 
 ### 会话管理
 
@@ -422,7 +422,7 @@ User: sessions prune --max-files 10
 
 ```xml
 <run_command>
-<command>python xiaochen_agent_v2/run.py</command>
+<command>python agentforge/run.py</command>
 <is_long_running>true</is_long_running>
 <cwd>.</cwd>
 <interactive>true</interactive>
@@ -431,13 +431,13 @@ User: sessions prune --max-files 10
 
 说明：
 - Windows 下交互模式会打开新的控制台窗口，且不会回传 stdout/stderr 到当前对话。
-- 若未显式指定 `interactive`，当检测到 `python xiaochen_agent_v2/run.py`（或 `python -m xiaochen_agent_v2`）且 `is_long_running=true` 时会自动启用交互模式。
+- 若未显式指定 `interactive`，当检测到 `python agentforge/run.py`（或 `python -m agentforge`）且 `is_long_running=true` 时会自动启用交互模式。
 
 ## 📁 项目结构
 
 ```
-xiaochen_agent_v2/
-├── xiaochen_agent_v2/      # 主程序包
+agentforge/
+├── agentforge/      # 主程序包
 │   ├── __init__.py         # 包初始化
 │   ├── __main__.py         # 程序入口
 │   ├── agent.py            # Agent 核心逻辑
@@ -490,7 +490,7 @@ xiaochen_agent_v2/
   "verify_ssl": true,                     // 是否验证 SSL 证书
   "auto_save_session": false,             // 是否自动保存会话
   "max_cycles": 30,                       // 最大循环次数
-  "token_threshold": 30000,               // 触发“长期摘要”压缩的 token 阈值（估算值）
+  "token_threshold": 30000,               // 触发"长期摘要"压缩的 token 阈值（估算值）
   "whitelisted_tools": [                  // 允许自动执行的工具白名单
     "search_files",
     "search_in_files",
@@ -511,109 +511,4 @@ xiaochen_agent_v2/
     "type"
   ],
   "read_indent_mode": "header",           // 读取代码时的缩进展示模式：smart/header
-  "python_validate_ruff": "auto"          // Python 校验：auto(自动探测 ruff)/off(禁用 ruff，仅 py_compile)
-}
-```
-
-- `token_threshold`：当单次请求构造的消息历史（估算 token）超过该阈值时，程序会生成/更新一条系统消息 `【长期摘要】`，并丢弃更早的详细历史，仅保留最近一小段对话用于继续交互。
-
-### 模型预设
-
-程序内置了以下模型预设：
-
-1. **DeepSeek (Default)**
-   - Base URL: `https://api.deepseek.com`
-   - Model: `deepseek-chat`
-   - 推荐用于：通用对话、代码生成
-
-2. **Doubao (Volcano Ark)**
-   - Base URL: `https://ark.cn-beijing.volces.com/api/v3`
-   - Model: `doubao-seed-1-6-251015`
-   - 推荐用于：中文对话
-
-3. **Ollama (Local)**
-   - Base URL: `http://localhost:11434/v1`
-   - Model: `deepseek-r1:8b`
-   - 推荐用于：本地部署、隐私保护、离线使用
-   - 注意：需要先安装并启动 Ollama 服务
-
-### 会话存储
-
-会话文件默认存储在 `logs/sessions/` 目录下，格式为：
-
-```
-20251227_143022_会话名称.json
-```
-
-每个会话文件包含：
-- 时间戳
-- 创建时间
-- 消息数量
-- 标题（首次对话时由 AI 并行生成；若缺失则使用首条用户输入作为标题）
-- 完整的消息历史（首条为系统提示词 System Message）
-- 缓存统计（cache_stats，用于命中率的跨会话恢复）
-
-### 环境变量配置到系统
-
-#### Windows (永久配置)
-
-```cmd
-# 添加到用户环境变量
-setx VOID_API_KEY "your_api_key_here"
-
-# 或使用图形界面
-# 1. Win + R 输入 sysdm.cpl
-# 2. 高级 -> 环境变量
-# 3. 新建用户变量 VOID_API_KEY
-```
-
-#### Linux/Mac (永久配置)
-
-```bash
-# 添加到 ~/.bashrc 或 ~/.zshrc
-echo 'export VOID_API_KEY="your_api_key_here"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-## 🎯 使用场景
-
-1. **代码开发**：让 AI 帮助编写、修改、调试代码
-2. **文件管理**：批量处理文件，搜索内容
-3. **任务自动化**：执行复杂的命令序列
-4. **学习记录**：保存与 AI 的对话历史，方便回顾
-5. **项目协作**：分享会话历史，复用成功的对话流程
-
-## ⚠️ 注意事项
-
-1. **API Key 安全**：不要将 API Key 提交到版本控制系统
-2. **会话隐私**：会话文件可能包含敏感信息，注意保护
-3. **命令安全**：程序会阻止危险命令（如 `rm -rf`），但仍需谨慎
-4. **中断时机**：在 AI 思考或执行任务时可以中断，但可能导致任务未完成
-5. **Token 与缓存命中率**：仅首轮输入会携带完整“目录/规则/任务”上下文，后续轮次会自动精简以减少重复 token，提高缓存命中比例。
-
-## 📝 更新日志
-
-### v2.1.0 (2025-12-27)
-
-#### 新增功能
-- ✅ 会话历史保存和加载功能
-- ✅ 友好的工具执行显示界面
-- ✅ 用户中断 AI 执行功能
-- ✅ 优化命令结果显示，避免重复输出
-
-#### 改进
-- 优化任务执行流程，显示更清晰
-- 改进中断处理逻辑，支持二次确认
-- 增强会话管理功能，支持命名和列表
-
-## 📄 许可证
-
-MIT License
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 📧 联系方式
-
-如有问题或建议，请通过 Issue 反馈。
+  "python_validate_ruff": "auto"          // Python 校验
