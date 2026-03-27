@@ -812,12 +812,23 @@ class Agent:
                                 usageOfRequest = dataChunk.get("usage")
                             choices = dataChunk.get("choices") if isinstance(dataChunk, dict) else None
                             if isinstance(choices, list) and choices:
-                                delta = choices[0].get("delta") if isinstance(choices[0], dict) else None
-                                if not delta:
+                                choice = choices[0] if isinstance(choices[0], dict) else None
+                                if not choice:
                                     continue
                                 
-                                # 提取推理内容 (reasoning_content)
-                                reasoning = delta.get("reasoning_content", "")
+                                # 获取 delta（流式响应）或 message（非流式/ollama）
+                                delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else None
+                                message = choice.get("message") if isinstance(choice.get("message"), dict) else None
+                                
+                                # 提取推理内容 - 支持多种格式
+                                # 1. DeepSeek API: delta.reasoning_content
+                                # 2. Ollama: delta.reasoning 或 message.reasoning
+                                reasoning = ""
+                                if delta:
+                                    reasoning = delta.get("reasoning_content", "") or delta.get("reasoning", "")
+                                if not reasoning and message:
+                                    reasoning = message.get("reasoning", "")
+                                
                                 if reasoning:
                                     if not printedReasoningHeader:
                                         printedReasoningHeader = True
@@ -828,8 +839,13 @@ class Agent:
                                     fullReasoning += reasoning
                                     print(f"{Fore.CYAN}{reasoning}{Style.RESET_ALL}", end="", flush=True)
 
-                                # 提取正文内容
-                                token = delta.get("content", "")
+                                # 提取正文内容 - 支持多种格式
+                                token = ""
+                                if delta:
+                                    token = delta.get("content", "")
+                                if not token and message:
+                                    token = message.get("content", "")
+                                
                                 if token:
                                     if (hasReasoned or printedReasoningHeader) and not printedAnswerHeader:
                                         printedAnswerHeader = True
