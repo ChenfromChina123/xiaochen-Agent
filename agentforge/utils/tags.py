@@ -1,0 +1,401 @@
+import textwrap
+from typing import Any, Dict, List, Optional, Tuple
+
+
+def _find_tag_span(source: str, tag: str) -> Optional[Tuple[int, int]]:
+    """返回指定tag在source中对应的(inner_start, inner_end)区间，大小写不敏感。"""
+    s = f"<{tag}>"
+    e = f"</{tag}>"
+    si = source.find(s)
+    if si != -1:
+        ei = source.find(e, si + len(s))
+        if ei != -1:
+            return si + len(s), ei
+
+    source_lower = source.lower()
+    s_lower = f"<{tag.lower()}>"
+    e_lower = f"</{tag.lower()}>"
+    si_lower = source_lower.find(s_lower)
+    if si_lower != -1:
+        ei_lower = source_lower.find(e_lower, si_lower + len(s_lower))
+        if ei_lower != -1:
+            return si_lower + len(s_lower), ei_lower
+
+    return None
+
+
+def _normalize_block_text(raw: str) -> str:
+    """
+    处理标签内容：
+    1. 去除首尾的换行符（如果存在）。
+    2. 不再强制去除公共缩进（dedent），以保留 AI 生成的原始缩进。
+       如果 AI 在 XML 中使用了缩进，则该缩进会被保留。
+       这对 auto_indent=False 的场景至关重要。
+    """
+    if raw.startswith("\r\n"):
+        raw = raw[2:]
+    elif raw.startswith("\n"):
+        raw = raw[1:]
+
+    if raw.endswith("\r\n"):
+        raw = raw[:-2]
+    elif raw.endswith("\n"):
+        raw = raw[:-1]
+
+    # 移除 textwrap.dedent 调用，避免误删必要的缩进
+    return raw
+
+
+def find_substring(source: str, sub: str, *, keep_indentation: bool = False) -> str:
+    """提取子标签内容。
+
+    - keep_indentation=False：默认行为，去掉首尾空白。
+    - keep_indentation=True：用于<content>类多行块，保留相对缩进并去除标签缩进影响。
+    """
+    span = _find_tag_span(source, sub)
+    if span is None:
+        return ""
+    inner = source[span[0] : span[1]]
+    if keep_indentation:
+        return _normalize_block_text(inner)
+    return inner.strip()
+
+
+def _has_unclosed_subtag(source: str, sub: str) -> bool:
+    source_lower = source.lower()
+    s = f"<{sub.lower()}>"
+    e = f"</{sub.lower()}>"
+    return s in source_lower and e not in source_lower
+
+
+def parse_stack_of_tags(text: str) -> List[Dict[str, Any]]:
+    tasks: List[Dict[str, Any]] = []
+    text_lower = text.lower()
+    valid_tags = [
+        "write_file",
+        "read_file",
+        "run_command",
+        "search_files",
+        "search_in_files",
+        "edit_lines",
+        "indent_lines",
+        "dedent_lines",
+        "copy_lines",
+        "paste_lines",
+        "replace_in_file",
+        "web_search",
+        "visit_page",
+        "task_add",
+        "task_update",
+        "task_delete",
+        "task_list",
+        "task_clear",
+        "ocr_image",
+        "ocr_document",
+    ]
+    idx = 0
+
+    while idx < len(text):
+        next_tag = None
+        next_start = -1
+        for tag in valid_tags:
+            start_tag = f"<{tag}>"
+            s_idx = text.find(start_tag, idx)
+            if s_idx == -1:
+                s_idx = text_lower.find(start_tag, idx)
+            if s_idx == -1:
+                continue
+            if next_start == -1 or s_idx < next_start:
+                next_start = s_idx
+                next_tag = tag
+
+        if next_start == -1 or not next_tag:
+            break
+
+        start_tag = f"<{next_tag}>"
+        end_tag = f"</{next_tag}>"
+        e_idx = text.find(end_tag, next_start + len(start_tag))
+        if e_idx == -1:
+            e_idx = text_lower.find(end_tag, next_start + len(start_tag))
+        if e_idx == -1:
+            idx = next_start + len(start_tag)
+            continue
+
+        inner = text[next_start + len(start_tag) : e_idx].strip()
+        task: Dict[str, Any] = {"type": next_tag}
+
+        if next_tag == "write_file":
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "content") or _has_unclosed_subtag(inner, "overwrite"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            task["content"] = find_substring(inner, "content", keep_indentation=True)
+            overwrite_str = find_substring(inner, "overwrite")
+            task["overwrite"] = overwrite_str.strip().lower() in {"1", "true", "yes", "y", "on"}
+            if not task["path"] or not task["content"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "read_file":
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "start_line") or _has_unclosed_subtag(inner, "end_line"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            start_line_str = find_substring(inner, "start_line")
+            end_line_str = find_substring(inner, "end_line")
+            if not task["path"] or not start_line_str.strip() or not end_line_str.strip():
+                idx = e_idx + len(end_tag)
+                continue
+            try:
+                task["start_line"] = int(start_line_str)
+                task["end_line"] = int(end_line_str)
+            except Exception:
+                idx = e_idx + len(end_tag)
+                continue
+            if task["start_line"] < 1 or task["end_line"] < task["start_line"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "run_command":
+            if _has_unclosed_subtag(inner, "command") or _has_unclosed_subtag(inner, "is_long_running") or _has_unclosed_subtag(inner, "cwd") or _has_unclosed_subtag(inner, "max_wait_seconds") or _has_unclosed_subtag(inner, "interactive"):
+                idx = e_idx + len(end_tag)
+                continue
+            cmd_from_tag = find_substring(inner, "command")
+            if "<command>" in inner.lower():
+                task["command"] = cmd_from_tag
+            else:
+                task["command"] = cmd_from_tag or inner.strip()
+            is_long_str = find_substring(inner, "is_long_running")
+            if is_long_str.strip():
+                task["is_long_running"] = is_long_str.strip()
+            cwd_str = find_substring(inner, "cwd")
+            if cwd_str.strip():
+                task["cwd"] = cwd_str.strip()
+            max_wait_str = find_substring(inner, "max_wait_seconds")
+            if max_wait_str.strip():
+                task["max_wait_seconds"] = max_wait_str.strip()
+            interactive_str = find_substring(inner, "interactive")
+            if interactive_str.strip():
+                task["interactive"] = interactive_str.strip()
+            if not task["command"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "search_files":
+            if _has_unclosed_subtag(inner, "pattern"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["pattern"] = find_substring(inner, "pattern") or "*"
+        elif next_tag == "search_in_files":
+            if _has_unclosed_subtag(inner, "regex") or _has_unclosed_subtag(inner, "glob") or _has_unclosed_subtag(inner, "root") or _has_unclosed_subtag(inner, "max_matches"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["regex"] = find_substring(inner, "regex")
+            task["glob"] = find_substring(inner, "glob") or "**/*"
+            task["root"] = find_substring(inner, "root") or "."
+            max_matches_str = find_substring(inner, "max_matches")
+            task["max_matches"] = int(max_matches_str) if max_matches_str.strip() else 200
+            if not task["regex"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "edit_lines":
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "content") or _has_unclosed_subtag(inner, "delete_start") or _has_unclosed_subtag(inner, "delete_end") or _has_unclosed_subtag(inner, "insert_at") or _has_unclosed_subtag(inner, "auto_indent"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            delete_start_str = find_substring(inner, "delete_start")
+            delete_end_str = find_substring(inner, "delete_end")
+            insert_at_str = find_substring(inner, "insert_at")
+            auto_indent_str = find_substring(inner, "auto_indent")
+            task["delete_start"] = int(delete_start_str) if delete_start_str.strip() else None
+            task["delete_end"] = int(delete_end_str) if delete_end_str.strip() else None
+            task["insert_at"] = int(insert_at_str) if insert_at_str.strip() else None
+            task["auto_indent"] = auto_indent_str.strip().lower() in {"1", "true", "yes", "y", "on"}
+            task["content"] = find_substring(inner, "content", keep_indentation=True)
+            if not task["path"]:
+                idx = e_idx + len(end_tag)
+                continue
+            if task["delete_start"] is None and task["insert_at"] is None and not task["content"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag in {"indent_lines", "dedent_lines"}:
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "start_line") or _has_unclosed_subtag(inner, "end_line") or _has_unclosed_subtag(inner, "spaces"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            start_line_str = find_substring(inner, "start_line")
+            end_line_str = find_substring(inner, "end_line")
+            spaces_str = find_substring(inner, "spaces")
+            if not task["path"] or not start_line_str.strip() or not end_line_str.strip():
+                idx = e_idx + len(end_tag)
+                continue
+            try:
+                task["start_line"] = int(start_line_str)
+                task["end_line"] = int(end_line_str)
+            except Exception:
+                idx = e_idx + len(end_tag)
+                continue
+            if task["start_line"] < 1 or task["end_line"] < task["start_line"]:
+                idx = e_idx + len(end_tag)
+                continue
+            if spaces_str.strip():
+                try:
+                    task["spaces"] = int(spaces_str)
+                except Exception:
+                    idx = e_idx + len(end_tag)
+                    continue
+            else:
+                task["spaces"] = 4
+            if int(task["spaces"]) <= 0:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "copy_lines":
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "start_line") or _has_unclosed_subtag(inner, "end_line") or _has_unclosed_subtag(inner, "register"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            start_line_str = find_substring(inner, "start_line")
+            end_line_str = find_substring(inner, "end_line")
+            task["register"] = find_substring(inner, "register").strip() or "default"
+            if not task["path"] or not start_line_str.strip() or not end_line_str.strip():
+                idx = e_idx + len(end_tag)
+                continue
+            try:
+                task["start_line"] = int(start_line_str)
+                task["end_line"] = int(end_line_str)
+            except Exception:
+                idx = e_idx + len(end_tag)
+                continue
+            if task["start_line"] < 1 or task["end_line"] < task["start_line"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "paste_lines":
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "insert_at") or _has_unclosed_subtag(inner, "register") or _has_unclosed_subtag(inner, "auto_indent"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            insert_at_str = find_substring(inner, "insert_at")
+            task["register"] = find_substring(inner, "register").strip() or "default"
+            auto_indent_str = find_substring(inner, "auto_indent")
+            task["auto_indent"] = auto_indent_str.strip().lower() in {"1", "true", "yes", "y", "on"}
+            if not task["path"] or not insert_at_str.strip():
+                idx = e_idx + len(end_tag)
+                continue
+            try:
+                task["insert_at"] = int(insert_at_str)
+            except Exception:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "replace_in_file":
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "search") or _has_unclosed_subtag(inner, "replace") or _has_unclosed_subtag(inner, "count") or _has_unclosed_subtag(inner, "regex") or _has_unclosed_subtag(inner, "auto_indent"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            task["search"] = find_substring(inner, "search", keep_indentation=True)
+            task["replace"] = find_substring(inner, "replace", keep_indentation=True)
+            count_str = find_substring(inner, "count")
+            task["count"] = int(count_str) if count_str.strip().isdigit() else 1
+            regex_str = find_substring(inner, "regex")
+            task["regex"] = regex_str.strip().lower() in {"1", "true", "yes", "y", "on"}
+            auto_indent_str = find_substring(inner, "auto_indent")
+            task["auto_indent"] = auto_indent_str.strip().lower() in {"1", "true", "yes", "y", "on"}
+            if not task["path"] or not task["search"]:
+                idx = e_idx + len(end_tag)
+                continue
+            if "<replace>" in inner.lower() and task["replace"] == "":
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "task_add":
+            if _has_unclosed_subtag(inner, "id") or _has_unclosed_subtag(inner, "content") or _has_unclosed_subtag(inner, "title") or _has_unclosed_subtag(inner, "status") or _has_unclosed_subtag(inner, "progress"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["id"] = find_substring(inner, "id")
+            content_from_tag = find_substring(inner, "content", keep_indentation=True)
+            title_from_tag = find_substring(inner, "title")
+            if "<content>" in inner.lower() and not content_from_tag:
+                idx = e_idx + len(end_tag)
+                continue
+            if "<title>" in inner.lower() and not title_from_tag:
+                idx = e_idx + len(end_tag)
+                continue
+            task["content"] = content_from_tag or title_from_tag or inner.strip()
+            task["status"] = find_substring(inner, "status") or "pending"
+            progress_str = find_substring(inner, "progress")
+            task["progress"] = int(progress_str) if progress_str.strip() else None
+            if not task["content"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "task_update":
+            if _has_unclosed_subtag(inner, "id") or _has_unclosed_subtag(inner, "content") or _has_unclosed_subtag(inner, "title") or _has_unclosed_subtag(inner, "status") or _has_unclosed_subtag(inner, "progress"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["id"] = find_substring(inner, "id")
+            content_from_tag = find_substring(inner, "content", keep_indentation=True)
+            title_from_tag = find_substring(inner, "title")
+            if "<content>" in inner.lower() and not content_from_tag:
+                idx = e_idx + len(end_tag)
+                continue
+            if "<title>" in inner.lower() and not title_from_tag:
+                idx = e_idx + len(end_tag)
+                continue
+            task["content"] = content_from_tag or title_from_tag or ""
+            task["status"] = find_substring(inner, "status")
+            progress_str = find_substring(inner, "progress")
+            task["progress"] = int(progress_str) if progress_str.strip() else None
+            if not task["id"]:
+                idx = e_idx + len(end_tag)
+                continue
+            if not task["content"] and not task["status"] and task["progress"] is None:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "web_search":
+            if _has_unclosed_subtag(inner, "query") or _has_unclosed_subtag(inner, "engine") or _has_unclosed_subtag(inner, "max_results"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["query"] = find_substring(inner, "query")
+            task["engine"] = find_substring(inner, "engine") or "bing"
+            max_results_str = find_substring(inner, "max_results")
+            task["max_results"] = int(max_results_str) if max_results_str.strip().isdigit() else 5
+            if not task["query"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "visit_page":
+            if _has_unclosed_subtag(inner, "url"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["url"] = find_substring(inner, "url")
+            if not task["url"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "task_delete":
+            if _has_unclosed_subtag(inner, "id"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["id"] = find_substring(inner, "id")
+            if not task["id"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "task_list":
+            pass
+        elif next_tag == "task_clear":
+            pass
+        elif next_tag == "ocr_image":
+            if _has_unclosed_subtag(inner, "path"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            if not task["path"]:
+                idx = e_idx + len(end_tag)
+                continue
+        elif next_tag == "ocr_document":
+            if _has_unclosed_subtag(inner, "path") or _has_unclosed_subtag(inner, "page_start") or _has_unclosed_subtag(inner, "page_end"):
+                idx = e_idx + len(end_tag)
+                continue
+            task["path"] = find_substring(inner, "path")
+            task["page_start"] = find_substring(inner, "page_start")
+            task["page_end"] = find_substring(inner, "page_end")
+            if not task["path"]:
+                idx = e_idx + len(end_tag)
+                continue
+
+        tasks.append(task)
+        idx = e_idx + len(end_tag)
+
+    return tasks
