@@ -547,6 +547,7 @@ def run_cli() -> None:
         print("sessions -help        会话管理（查看/加载/新建）")
         print("model -help           模型管理（查看/切换/配置）")
         print("whitelist -help       白名单管理（查看/修改）")
+        print("workplace -help       工作目录管理（查看/打开）")
         print("paste                 进入粘贴模式，保存长文本到文件并通知 Agent")
         print("快捷键 [Ctrl+V]       实时识别并分析剪贴板图片（无需回车）")
         print("cancel / 撤回         撤回当前已粘贴但未发送的图片")
@@ -599,6 +600,15 @@ def run_cli() -> None:
         print("whitelist cmd add <basecmd>      添加命令白名单（仅匹配首段命令）")
         print("whitelist cmd remove <basecmd>   移除命令白名单")
         print("whitelist reset                 重置为默认白名单")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
+
+    def print_help_workplace() -> None:
+        print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}workplace -help{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+        print("workplace                       查看Agent工作目录信息")
+        print("workplace show                  显示工作目录详细信息和结构")
+        print("workplace open                  在文件管理器中打开工作目录")
         print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
 
     def persist_history(messages: list) -> None:
@@ -1915,6 +1925,26 @@ def run_cli() -> None:
                         continue
 
                 print_help_whitelist()
+                continue
+
+            if cmd == "workplace":
+                if args and args[0].lower() in {"-help", "help", "?"}:
+                    print_help_workplace()
+                    continue
+                if not args or args[0].lower() in {"show", "info", "dir"}:
+                    info = agent.showWorkplaceDir()
+                    print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+                    print(f"{Fore.CYAN}Agent WorkPlace 信息{Style.RESET_ALL}")
+                    print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+                    print(info)
+                    print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}\n")
+                    continue
+                if args[0].lower() in {"open", "explorer", "file"}:
+                    success = agent.openWorkplaceInExplorer()
+                    if success:
+                        print(f"{Fore.GREEN}✓ 已在文件管理器中打开工作目录{Style.RESET_ALL}")
+                    continue
+                print_help_workplace()
                 continue
 
             if cmd in ["exit", "quit"] and not args:
