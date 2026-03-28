@@ -131,6 +131,69 @@ class Agent:
         os.makedirs(dir_path, exist_ok=True)
         return dir_path
 
+    def showWorkplaceDir(self) -> str:
+        """
+        获取并显示Agent工作目录信息。
+        
+        Returns:
+            包含工作目录详细信息的字符串
+        """
+        import os
+        from ..utils.files import generate_dir_tree
+        
+        info_lines = [
+            f"Agent WorkPlace: {self._workplaceDir}",
+            f"Exists: {os.path.exists(self._workplaceDir)}",
+        ]
+        
+        if os.path.exists(self._workplaceDir):
+            try:
+                stat = os.stat(self._workplaceDir)
+                info_lines.append(f"Size: {stat.st_size} bytes")
+            except Exception:
+                pass
+            
+            # 添加目录树结构
+            try:
+                tree = generate_dir_tree(self._workplaceDir, max_depth=2, max_entries=50)
+                info_lines.append(f"\nStructure:\n{tree}")
+            except Exception as e:
+                info_lines.append(f"\nStructure: (unable to generate: {e})")
+        
+        return "\n".join(info_lines)
+
+    def openWorkplaceInExplorer(self) -> bool:
+        """
+        在系统文件管理器中打开Agent工作目录。
+        
+        Returns:
+            是否成功打开
+        """
+        import platform
+        import subprocess
+        
+        try:
+            system = platform.system()
+            workplace = self._workplaceDir
+            
+            # 确保目录存在
+            os.makedirs(workplace, exist_ok=True)
+            
+            if system == "Windows":
+                # Windows: 使用 explorer
+                subprocess.Popen(["explorer", workplace], shell=True)
+            elif system == "Darwin":
+                # macOS: 使用 open
+                subprocess.Popen(["open", workplace])
+            else:
+                # Linux: 使用 xdg-open
+                subprocess.Popen(["xdg-open", workplace])
+            
+            return True
+        except Exception as e:
+            print(f"{Fore.RED}Failed to open WorkPlace: {e}{Style.RESET_ALL}")
+            return False
+
     def _require_requests(self) -> bool:
         """
         检查 requests 依赖是否可用。
